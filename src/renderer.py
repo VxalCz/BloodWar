@@ -3,7 +3,8 @@
 import pygame
 
 from constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, TILE_SIZE, TILESET_SCALE
+    SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, TILE_SIZE, TILESET_SCALE,
+    XP_THRESHOLDS
 )
 from tiles import get_tile
 
@@ -16,33 +17,40 @@ class Renderer:
 
     def draw(self) -> None:
         """Draw game to screen."""
-        self._draw_background()
-        self._draw_objects()
+        cx = int(self.game.camera_x)
+        cy = int(self.game.camera_y)
+
+        self._draw_background(cx, cy)
+        self._draw_objects(cx, cy)
         self._draw_ui()
 
         if self.game.show_grid:
             self._draw_debug_grid()
 
+        if self.game.level_up_pending:
+            self._draw_level_up_overlay()
+
         pygame.display.flip()
 
-    def _draw_background(self) -> None:
-        """Draw tiled grass background."""
+    def _draw_background(self, cx: int, cy: int) -> None:
+        """Draw tiled grass background offset by camera."""
         grass_tile = self.game.grass_tile
-        grass_width = grass_tile.get_width()
-        grass_height = grass_tile.get_height()
+        tw = grass_tile.get_width()
+        th = grass_tile.get_height()
 
-        cols_needed = (SCREEN_WIDTH // grass_width) + 2
-        rows_needed = (SCREEN_HEIGHT // grass_height) + 2
+        start_col = cx // tw
+        start_row = cy // th
+        cols_needed = (SCREEN_WIDTH // tw) + 2
+        rows_needed = (SCREEN_HEIGHT // th) + 2
 
-        for row in range(rows_needed):
-            for col in range(cols_needed):
-                x = col * grass_width
-                y = row * grass_height
-                if x < SCREEN_WIDTH + grass_width and y < SCREEN_HEIGHT + grass_height:
-                    self.game.screen.blit(grass_tile, (x, y))
+        for row in range(start_row, start_row + rows_needed):
+            for col in range(start_col, start_col + cols_needed):
+                sx = col * tw - cx
+                sy = row * th - cy
+                self.game.screen.blit(grass_tile, (sx, sy))
 
-    def _draw_objects(self) -> None:
-        """Draw all game objects with Y-sorting."""
+    def _draw_objects(self, cx: int, cy: int) -> None:
+        """Draw all game objects with Y-sorting, offset by camera."""
         renderables = []
 
         # Player
@@ -59,22 +67,28 @@ class Renderer:
         # Sort by Y
         renderables.sort(key=lambda x: x[0])
 
-        # Draw sorted objects
-        for y, obj in renderables:
-            self.game.screen.blit(obj.image, obj.rect)
+        # Draw sorted objects with camera offset
+        for _, obj in renderables:
+            draw_x = obj.rect.left - cx
+            draw_y = obj.rect.top - cy
+            self.game.screen.blit(obj.image, (draw_x, draw_y))
 
-        # Draw gems and projectiles
-        self.game.all_sprites.draw(self.game.screen)
+        # Draw gems and projectiles with camera offset
+        for sprite in self.game.gems:
+            sx = sprite.rect.left - cx
+            sy = sprite.rect.top - cy
+            self.game.screen.blit(sprite.image, (sx, sy))
+
+        for sprite in self.game.projectiles:
+            sx = sprite.rect.left - cx
+            sy = sprite.rect.top - cy
+            self.game.screen.blit(sprite.image, (sx, sy))
 
     def _draw_ui(self) -> None:
-        """Draw UI elements (score, game over)."""
+        """Draw HUD: score, level, XP bar, game over."""
         screen = self.game.screen
 
-        if not self.game.game_over:
-            font = pygame.font.Font(None, 36)
-            score_text = font.render(f"Skóre: {self.game.score // 60}", True, WHITE)
-            screen.blit(score_text, (10, 10))
-        else:
+        if self.game.game_over:
             font = pygame.font.Font(None, 72)
             game_over_text = font.render("GAME OVER", True, (255, 50, 50))
             text_rect = game_over_text.get_rect(
@@ -88,6 +102,120 @@ class Renderer:
                 center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
             )
             screen.blit(restart_text, restart_rect)
+            return
+
+        font = pygame.font.Font(None, 36)
+
+        # Score (čas)
+        score_text = font.render(f"Čas: {self.game.score}s", True, WHITE)
+        screen.blit(score_text, (10, 10))
+
+        # Kills
+        kills_text = font.render(f"Kills: {self.game.kills}", True, WHITE)
+        screen.blit(kills_text, (10, 40))
+
+        # Level
+        level_text = font.render(f"Level: {self.game.level + 1}", True, (255, 220, 50))
+        screen.blit(level_text, (10, 70))
+
+        # Spawn interval (debug info)
+        interval_text = font.render(
+            f"Spawn: {self.game._current_spawn_interval()}f", True, (180, 180, 180)
+        )
+        screen.blit(interval_text, (SCREEN_WIDTH - 150, 10))
+
+        # XP bar
+        self._draw_xp_bar()
+
+    def _draw_xp_bar(self) -> None:
+        """Draw XP progress bar at bottom of screen."""
+        screen = self.game.screen
+        bar_x = 10
+        bar_y = SCREEN_HEIGHT - 20
+        bar_w = SCREEN_WIDTH - 20
+        bar_h = 12
+
+        level = self.game.level
+        xp = self.game.xp
+
+        # XP do dalšího levelu
+        if level < len(XP_THRESHOLDS):
+            xp_needed = XP_THRESHOLDS[level]
+            # Předchozí threshold (pro relativní progress)
+            xp_prev = XP_THRESHOLDS[level - 1] if level > 0 else 0
+            xp_relative = xp - xp_prev
+            xp_range = xp_needed - xp_prev
+            progress = min(1.0, xp_relative / xp_range) if xp_range > 0 else 1.0
+        else:
+            progress = 1.0  # Max level
+
+        # Background
+        pygame.draw.rect(screen, (40, 40, 40), (bar_x, bar_y, bar_w, bar_h))
+        # Fill
+        fill_w = int(bar_w * progress)
+        if fill_w > 0:
+            pygame.draw.rect(screen, (80, 200, 120), (bar_x, bar_y, fill_w, bar_h))
+        # Border
+        pygame.draw.rect(screen, (150, 150, 150), (bar_x, bar_y, bar_w, bar_h), 1)
+
+        # XP text
+        font_small = pygame.font.Font(None, 20)
+        if level < len(XP_THRESHOLDS):
+            xp_prev = XP_THRESHOLDS[level - 1] if level > 0 else 0
+            xp_text = font_small.render(
+                f"XP {xp - xp_prev}/{XP_THRESHOLDS[level] - xp_prev}", True, WHITE
+            )
+        else:
+            xp_text = font_small.render("MAX LEVEL", True, (255, 220, 50))
+        screen.blit(xp_text, (bar_x + bar_w // 2 - xp_text.get_width() // 2, bar_y - 2))
+
+    def _draw_level_up_overlay(self) -> None:
+        """Draw semi-transparent level-up choice overlay."""
+        screen = self.game.screen
+
+        # Tmavý overlay
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        screen.blit(overlay, (0, 0))
+
+        font_big = pygame.font.Font(None, 56)
+        font_mid = pygame.font.Font(None, 36)
+        font_small = pygame.font.Font(None, 28)
+
+        # Nadpis
+        title = font_big.render("LEVEL UP!", True, (255, 220, 50))
+        screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 100)))
+
+        subtitle = font_mid.render("Vyber upgrade (1 / 2 / 3):", True, WHITE)
+        screen.blit(subtitle, subtitle.get_rect(center=(SCREEN_WIDTH // 2, 155)))
+
+        choices = self.game.upgrade_choices
+        card_w = 200
+        card_h = 110
+        gap = 30
+        total_w = len(choices) * card_w + (len(choices) - 1) * gap
+        start_x = (SCREEN_WIDTH - total_w) // 2
+        card_y = 200
+
+        for i, upgrade in enumerate(choices):
+            cx = start_x + i * (card_w + gap)
+
+            # Karta (tmavě modrá)
+            card_rect = pygame.Rect(cx, card_y, card_w, card_h)
+            pygame.draw.rect(screen, (30, 50, 100), card_rect, border_radius=8)
+            pygame.draw.rect(screen, (80, 130, 220), card_rect, 2, border_radius=8)
+
+            # Číslo volby
+            num = font_big.render(str(i + 1), True, (255, 220, 50))
+            screen.blit(num, num.get_rect(center=(cx + card_w // 2, card_y + 25)))
+
+            # Název upgradu
+            name = font_small.render(upgrade["name"], True, WHITE)
+            screen.blit(name, name.get_rect(center=(cx + card_w // 2, card_y + 65)))
+
+            # Popis
+            desc = font_small.render(upgrade["desc"], True, (160, 200, 255))
+            screen.blit(desc, desc.get_rect(center=(cx + card_w // 2, card_y + 90)))
 
     def _draw_debug_grid(self) -> None:
         """Draw debug grid with tileset tiles."""

@@ -3,9 +3,8 @@
 import pygame
 
 from constants import (
-    ENEMY_SIZE, ENEMY_SPEED, RED,
+    ENEMY_SIZE, BASE_ENEMY_SPEED, RED,
     PROJECTILE_SPEED, PROJECTILE_SIZE, YELLOW,
-    SCREEN_WIDTH, SCREEN_HEIGHT,
     ENEMY_ANIM_SCALE, ENEMY_ANIM_SPEED
 )
 
@@ -51,7 +50,7 @@ class Enemy(pygame.sprite.Sprite):
         self.position = pygame.math.Vector2(x, y)
         self.velocity = pygame.math.Vector2(0, 0)
 
-    def update(self, dt: float, player_position: pygame.math.Vector2) -> None:
+    def update(self, dt: float, player_position: pygame.math.Vector2, elapsed_seconds: float = 0.0) -> None:
         """Aktualizace pozice nepřítele - pohyb k hráči."""
         # Vektor od nepřítele k hráči
         direction = player_position - self.position
@@ -62,8 +61,11 @@ class Enemy(pygame.sprite.Sprite):
         else:
             self.velocity = pygame.math.Vector2(0, 0)
 
+        # Rychlost roste s časem: každé 2 minuty +100%
+        speed = BASE_ENEMY_SPEED * (1.0 + elapsed_seconds / 120.0)
+
         # Pohyb podle delta time
-        self.position += self.velocity * ENEMY_SPEED * dt
+        self.position += self.velocity * speed * dt
 
         # Aktualizace rect
         self.rect.center = self.position
@@ -90,13 +92,14 @@ class Projectile(pygame.sprite.Sprite):
         # Pozice a rychlost pomocí Vector2
         self.position = pygame.math.Vector2(x, y)
         self.velocity = direction.normalize() * PROJECTILE_SPEED
+        self._lifetime = 0.0
 
     def update(self, dt: float) -> None:
         """Aktualizace pozice projektilu."""
         self.position += self.velocity * dt
         self.rect.center = self.position
 
-        # Odstranění pokud je mimo obrazovku
-        if (self.position.x < -50 or self.position.x > SCREEN_WIDTH + 50 or
-            self.position.y < -50 or self.position.y > SCREEN_HEIGHT + 50):
+        # Odstranění po uplynutí životnosti (2 sekundy letu)
+        self._lifetime += dt
+        if self._lifetime > 2.0:
             self.kill()

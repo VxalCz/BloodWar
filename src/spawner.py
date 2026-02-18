@@ -15,21 +15,23 @@ class Spawner:
         self.game = game
 
     def spawn_enemy(self) -> None:
-        """Create new enemy at screen edge."""
+        """Create new enemy at screen edge (world-space)."""
+        cx = self.game.camera_x
+        cy = self.game.camera_y
         side = random.randint(0, 3)
 
         if side == 0:  # Top
-            x = random.randint(0, SCREEN_WIDTH)
-            y = -ENEMY_SIZE
+            x = cx + random.randint(0, SCREEN_WIDTH)
+            y = cy - ENEMY_SIZE
         elif side == 1:  # Bottom
-            x = random.randint(0, SCREEN_WIDTH)
-            y = SCREEN_HEIGHT + ENEMY_SIZE
+            x = cx + random.randint(0, SCREEN_WIDTH)
+            y = cy + SCREEN_HEIGHT + ENEMY_SIZE
         elif side == 2:  # Left
-            x = -ENEMY_SIZE
-            y = random.randint(0, SCREEN_HEIGHT)
+            x = cx - ENEMY_SIZE
+            y = cy + random.randint(0, SCREEN_HEIGHT)
         else:  # Right
-            x = SCREEN_WIDTH + ENEMY_SIZE
-            y = random.randint(0, SCREEN_HEIGHT)
+            x = cx + SCREEN_WIDTH + ENEMY_SIZE
+            y = cy + random.randint(0, SCREEN_HEIGHT)
 
         enemy = Enemy(x, y)
         self.game.enemies.add(enemy)

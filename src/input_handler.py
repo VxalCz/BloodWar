@@ -15,15 +15,24 @@ class InputHandler:
             if event.type == pygame.QUIT:
                 self.game.running = False
 
-            # Toggle debug grid
             if event.type == pygame.KEYDOWN:
+                # Toggle debug grid
                 if event.key == pygame.K_g:
                     self.game.show_grid = not self.game.show_grid
 
-            # Restart after game over
-            if event.type == pygame.KEYDOWN and self.game.game_over:
-                if event.key == pygame.K_r:
+                # Restart after game over
+                if self.game.game_over and event.key == pygame.K_r:
                     self.game.__init__()
+
+                # Level-up choice
+                if self.game.level_up_pending:
+                    choices = self.game.upgrade_choices
+                    if event.key == pygame.K_1 and len(choices) >= 1:
+                        self.game.apply_upgrade(choices[0])
+                    elif event.key == pygame.K_2 and len(choices) >= 2:
+                        self.game.apply_upgrade(choices[1])
+                    elif event.key == pygame.K_3 and len(choices) >= 3:
+                        self.game.apply_upgrade(choices[2])
 
     def handle_camera(self) -> None:
         """Handle camera movement when debug grid is shown."""

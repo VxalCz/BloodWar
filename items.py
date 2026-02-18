@@ -5,7 +5,7 @@ import pygame
 from constants import (
     TILE_TREE_X, TILE_TREE_Y, TREE_WIDTH, TREE_HEIGHT,
     TILE_SIZE, TILESET_SCALE, GEM_SIZE, GREEN,
-    MAGNET_RADIUS, GEM_SPEED
+    GEM_SPEED
 )
 from tiles import get_tile
 
@@ -46,12 +46,12 @@ class ExperienceGem(pygame.sprite.Sprite):
 
         self.position = pygame.math.Vector2(x, y)
 
-    def update(self, dt: float, player_position: pygame.math.Vector2) -> None:
+    def update(self, dt: float, player_position: pygame.math.Vector2, magnet_radius: float = 100.0) -> None:
         """Aktualizace pozice gemu - magnet efekt."""
         distance = self.position.distance_to(player_position)
 
         # Magnet efekt - pokud je hráč blízko, gem se pohybuje k hráči
-        if distance < MAGNET_RADIUS:
+        if distance < magnet_radius:
             direction = player_position - self.position
             if direction.length() > 0:
                 self.position += direction.normalize() * GEM_SPEED * dt

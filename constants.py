@@ -35,10 +35,9 @@ ANIMATION_SPEED = 0.15      # sekundy mezi snímky
 # ==============================================================================
 
 ENEMY_SIZE = 24
-ENEMY_SPEED = 100           # pixels per second
-ENEMY_SPAWN_INTERVAL = 60   # frames
-ENEMY_ANIM_SCALE = 3        # zvětšení sprite
-ENEMY_ANIM_SPEED = 0.3      # sekundy mezi snímky (pomalejší než hráč)
+BASE_ENEMY_SPEED = 100      # pixels per second (základ, roste s časem)
+ENEMY_SPEED = 100           # alias pro zpětnou kompatibilitu
+ENEMY_SPAWN_INTERVAL = 60   # frames (základ, klesá s časem)
 ENEMY_ANIM_SCALE = 3        # zvětšení sprite
 ENEMY_ANIM_SPEED = 0.3      # sekundy mezi snímky
 
@@ -58,6 +57,20 @@ GEM_SIZE = 10
 GEM_VALUE = 10              # XP za gem
 MAGNET_RADIUS = 100        # pixelů - vzdálenost pro magnet efekt
 GEM_SPEED = 200             # pixels per second - rychlost gemu k hráči
+
+# ==============================================================================
+# MAPA
+# ==============================================================================
+
+WORLD_WIDTH = 6400          # šířka světa v pixelech
+WORLD_HEIGHT = 4800         # výška světa v pixelech
+
+# ==============================================================================
+# XP A LEVEL-UP
+# ==============================================================================
+
+# XP potřebné pro každý level (index = aktuální level, hodnota = XP do dalšího)
+XP_THRESHOLDS = [20, 50, 90, 140, 200, 270, 350, 440, 540, 650]
 
 # ==============================================================================
 # TILESET KONSTANTY

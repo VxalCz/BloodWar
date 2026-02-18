@@ -3,8 +3,9 @@
 import pygame
 
 from constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_SPEED,
-    ANIMATION_SCALE, ANIMATION_SPEED, BLUE
+    WORLD_WIDTH, WORLD_HEIGHT, PLAYER_SPEED,
+    ANIMATION_SCALE, ANIMATION_SPEED, BLUE,
+    MAGNET_RADIUS
 )
 
 
@@ -64,6 +65,11 @@ class Player(pygame.sprite.Sprite):
         self.position = pygame.math.Vector2(x, y)
         self.velocity = pygame.math.Vector2(0, 0)
 
+        # Mutable gameplay stats (modifikovatelné upgrady)
+        self.speed = PLAYER_SPEED
+        self.magnet_radius = MAGNET_RADIUS
+        self.projectile_count = 1
+
     def get_input(self) -> None:
         """Zpracování vstupu z klávesnice."""
         keys = pygame.key.get_pressed()
@@ -91,13 +97,13 @@ class Player(pygame.sprite.Sprite):
         self.get_input()
 
         # Pohyb podle delta time
-        self.position += self.velocity * PLAYER_SPEED * dt
+        self.position += self.velocity * self.speed * dt
 
-        # Omezení pohybu na obrazovku
+        # Omezení pohybu na hranice světa
         half_width = self.frame_width // 2
         half_height = self.frame_height // 2
-        self.position.x = max(half_width, min(SCREEN_WIDTH - half_width, self.position.x))
-        self.position.y = max(half_height, min(SCREEN_HEIGHT - half_height, self.position.y))
+        self.position.x = max(half_width, min(WORLD_WIDTH - half_width, self.position.x))
+        self.position.y = max(half_height, min(WORLD_HEIGHT - half_height, self.position.y))
 
         # Aktualizace rect
         self.rect.center = self.position

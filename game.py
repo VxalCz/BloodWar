@@ -7,7 +7,7 @@ import pygame
 
 from constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS,
-    ENEMY_SPAWN_INTERVAL
+    WORLD_WIDTH, WORLD_HEIGHT,
 )
 from tiles import get_tile, init_grass_variants
 from player import Player
@@ -18,6 +18,14 @@ from src.spawner import Spawner
 from src.combat import Combat
 from src.collision import Collision
 from src.renderer import Renderer
+
+# Definice dostupných upgradů
+UPGRADES = [
+    {"id": "speed",     "name": "Rychlost pohybu",   "desc": "+50 px/s"},
+    {"id": "firerate",  "name": "Kadence střelby",    "desc": "-10 framů cooldown"},
+    {"id": "magnet",    "name": "Magnetický dosah",   "desc": "+60 px dosah gemů"},
+    {"id": "multishot", "name": "Dvojitá střela",     "desc": "+1 projektil"},
+]
 
 
 class Game:
@@ -38,15 +46,15 @@ class Game:
         self.gems = pygame.sprite.Group()
         self.trees = pygame.sprite.Group()
 
-        # Create player
-        self.player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        # Create player in world center
+        self.player = Player(WORLD_WIDTH // 2, WORLD_HEIGHT // 2)
         self.all_sprites.add(self.player)
 
-        # Generate 20 random trees
-        for _ in range(20):
-            x = random.randint(50, SCREEN_WIDTH - 50)
-            y = random.randint(50, SCREEN_HEIGHT - 50)
-            if self.player.position.distance_to(pygame.math.Vector2(x, y)) < 100:
+        # Generate 150 random trees spread across the world
+        for _ in range(200):
+            x = random.randint(100, WORLD_WIDTH - 100)
+            y = random.randint(100, WORLD_HEIGHT - 100)
+            if self.player.position.distance_to(pygame.math.Vector2(x, y)) < 200:
                 continue
             tree = Tree(x, y)
             self.trees.add(tree)
@@ -55,10 +63,22 @@ class Game:
         self.running = True
         self.game_over = False
         self.frame_count = 0
-        self.score = 0
+        self.score = 0      # čas přežití (frame_count // FPS)
+        self.kills = 0
+
+        # XP a level
+        self.xp = 0
+        self.level = 0      # index do XP_THRESHOLDS
+        self.level_up_pending = False
+        self.upgrade_choices: list[dict] = []
+
+        # Dynamická obtížnost
+        self.wand_cooldown_frames = 60   # mutable — snižuje se upgradem
+
+        # Debug
         self.show_grid = False
-        self.camera_x = 0
-        self.camera_y = 0
+        self.camera_x = 0.0
+        self.camera_y = 0.0
 
         # Grass tile for background
         self.grass_tile = get_tile(2, 3)
@@ -70,38 +90,73 @@ class Game:
         self.collision = Collision(self)
         self.renderer = Renderer(self)
 
+    @property
+    def elapsed_seconds(self) -> float:
+        return self.frame_count / FPS
+
+    def _current_spawn_interval(self) -> int:
+        """Spawn interval klesá každých 10s o 5 framů, minimum 10."""
+        reduction = int(self.elapsed_seconds // 10) * 5
+        return max(10, 60 - reduction)
+
+    def _update_camera(self) -> None:
+        """Kamera sleduje hráče, clampováno na hranice světa."""
+        self.camera_x = self.player.position.x - SCREEN_WIDTH / 2
+        self.camera_y = self.player.position.y - SCREEN_HEIGHT / 2
+        self.camera_x = max(0, min(WORLD_WIDTH - SCREEN_WIDTH, self.camera_x))
+        self.camera_y = max(0, min(WORLD_HEIGHT - SCREEN_HEIGHT, self.camera_y))
+
+    def _trigger_level_up(self) -> None:
+        """Spustí level-up obrazovku s náhodnými volbami."""
+        self.level_up_pending = True
+        self.upgrade_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
+
+    def apply_upgrade(self, upgrade: dict) -> None:
+        """Aplikuje vybraný upgrade."""
+        uid = upgrade["id"]
+        if uid == "speed":
+            self.player.speed += 50
+        elif uid == "firerate":
+            self.wand_cooldown_frames = max(10, self.wand_cooldown_frames - 10)
+        elif uid == "magnet":
+            self.player.magnet_radius += 60
+        elif uid == "multishot":
+            self.player.projectile_count += 1
+        self.level_up_pending = False
+        self.upgrade_choices = []
+
     def update(self, dt: float) -> None:
         """Update game state."""
-        if self.game_over:
+        if self.game_over or self.level_up_pending:
             return
 
         self.frame_count += 1
-        self.score += 1
+        self.score = self.frame_count // FPS
 
-        # Spawn enemy every 60 frames
-        if self.frame_count % ENEMY_SPAWN_INTERVAL == 0:
+        # Spawn enemy (dynamický interval)
+        if self.frame_count % self._current_spawn_interval() == 0:
             self.spawner.spawn_enemy()
 
-        # Shoot every 60 frames
-        if self.frame_count % 60 == 0:
+        # Shoot (dynamický cooldown)
+        if self.frame_count % self.wand_cooldown_frames == 0:
             self.combat.shoot()
 
-        # Update player (handles its own input)
+        # Update player
         self.player.update(dt)
 
         # Update enemies
         for enemy in self.enemies:
-            enemy.update(dt, self.player.position)
+            enemy.update(dt, self.player.position, self.elapsed_seconds)
 
         # Update projectiles
         self.projectiles.update(dt)
 
         # Update gems
         for gem in self.gems:
-            gem.update(dt, self.player.position)
+            gem.update(dt, self.player.position, self.player.magnet_radius)
 
-        # Handle camera (for debug grid)
-        self.input_handler.handle_camera()
+        # Update camera
+        self._update_camera()
 
         # Check collisions
         self.collision.check_collisions()

@@ -16,19 +16,32 @@ python main.py
 
 ## Controls
 
-- **WASD** - Move player
-- **G** - Toggle debug grid
-- **R** - Restart (after game over)
+| Key | Action |
+|-----|--------|
+| **WASD** | Move player |
+| **1 / 2 / 3** | Choose upgrade on level-up screen |
+| **R** | Restart (after game over) |
+| **G** | Toggle debug grid |
 
 ## Features
 
-- Enemy spawning and chasing
-- Magic Wand auto-shooting
+- Scrollable world (6400×4800 px) with camera tracking
+- Enemy spawning at screen edges with progressive difficulty
+  - Spawn rate increases every 10 seconds
+  - Enemy speed scales with survival time
+- Magic Wand auto-shooting toward nearest enemy
+- Multishot support (spreads projectiles in a fan)
 - Experience gems with magnetic pickup
-- Score system
-- Y-sorted rendering
+- XP & level-up system — pause + choose 1 of 3 upgrades:
+  - Speed boost
+  - Faster fire rate
+  - Wider magnet range
+  - Extra projectile
+- Y-sorted rendering for depth perception
+- Score (survival time) + kills tracker
 
 ## Tech
 
 - Python + pygame-ce
-- Modular architecture (src/)
+- Modular architecture (`src/`)
+- World-space coordinates with camera offset rendering

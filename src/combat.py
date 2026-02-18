@@ -1,5 +1,9 @@
 """BloodWar - Combat module."""
 
+import math
+
+import pygame
+
 from enemy import Enemy, Projectile
 
 
@@ -26,18 +30,37 @@ class Combat:
         return nearest_enemy
 
     def shoot(self) -> None:
-        """Shoot projectile toward nearest enemy."""
+        """Shoot projectiles toward nearest enemy."""
         target = self.find_nearest_enemy()
         if target is None:
             return
 
         direction = target.position - self.game.player.position
+        if direction.length() == 0:
+            return
 
-        if direction.length() > 0:
-            projectile = Projectile(
-                self.game.player.position.x,
-                self.game.player.position.y,
-                direction
-            )
-            self.game.projectiles.add(projectile)
-            self.game.all_sprites.add(projectile)
+        count = self.game.player.projectile_count
+
+        if count == 1:
+            self._spawn_projectile(direction)
+        else:
+            # Spread: rozložit projektily symetricky kolem cíle
+            spread_angle = 15.0  # stupňů mezi projektily
+            base_angle = math.atan2(direction.y, direction.x)
+            total_spread = spread_angle * (count - 1)
+            start_angle = base_angle - math.radians(total_spread / 2)
+
+            for i in range(count):
+                angle = start_angle + math.radians(spread_angle * i)
+                spread_dir = pygame.math.Vector2(math.cos(angle), math.sin(angle))
+                self._spawn_projectile(spread_dir)
+
+    def _spawn_projectile(self, direction: pygame.math.Vector2) -> None:
+        """Vytvoří projektil z pozice hráče."""
+        projectile = Projectile(
+            self.game.player.position.x,
+            self.game.player.position.y,
+            direction
+        )
+        self.game.projectiles.add(projectile)
+        self.game.all_sprites.add(projectile)
