@@ -46,7 +46,7 @@ class ExperienceGem(pygame.sprite.Sprite):
 
         self.position = pygame.math.Vector2(x, y)
 
-    def update(self, dt: float, player_position: pygame.math.Vector2, magnet_radius: float = 100.0) -> None:
+    def update(self, dt: float, player_position: pygame.math.Vector2, magnet_radius: float = 100.0, gem_speed_mult: float = 1.0) -> None:
         """Aktualizace pozice gemu - magnet efekt."""
         distance = self.position.distance_to(player_position)
 
@@ -54,6 +54,6 @@ class ExperienceGem(pygame.sprite.Sprite):
         if distance < magnet_radius:
             direction = player_position - self.position
             if direction.length() > 0:
-                self.position += direction.normalize() * GEM_SPEED * dt
+                self.position += direction.normalize() * GEM_SPEED * gem_speed_mult * dt
 
         self.rect.center = self.position

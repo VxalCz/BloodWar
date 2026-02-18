@@ -5,7 +5,8 @@ import pygame
 from constants import (
     WORLD_WIDTH, WORLD_HEIGHT, PLAYER_SPEED,
     ANIMATION_SCALE, ANIMATION_SPEED, BLUE,
-    MAGNET_RADIUS
+    MAGNET_RADIUS, PLAYER_MAX_HP, PLAYER_INVINCIBILITY_TIME,
+    PROJECTILE_SPEED, PROJECTILE_SIZE,
 )
 
 
@@ -70,6 +71,31 @@ class Player(pygame.sprite.Sprite):
         self.magnet_radius = MAGNET_RADIUS
         self.projectile_count = 1
 
+        # Projektil stats
+        self.proj_size = PROJECTILE_SIZE
+        self.proj_speed = PROJECTILE_SPEED
+        self.proj_lifetime = 2.0
+        self.pierce = 0
+
+        # XP a sběr
+        self.xp_bonus = 0
+        self.gem_speed_mult = 1.0
+
+        # Vampirismus
+        self.heal_on_kill = 0.0
+        self.heal_accum = 0.0
+
+        # Speciální schopnosti
+        self.adrenalin = False
+        self.has_explosion = False
+        self.aura_radius = 0
+        self.orbital_count = 0
+
+        # HP systém
+        self.max_hp = PLAYER_MAX_HP
+        self.hp = PLAYER_MAX_HP
+        self.invincibility_timer = 0.0
+
     def get_input(self) -> None:
         """Zpracování vstupu z klávesnice."""
         keys = pygame.key.get_pressed()
@@ -96,8 +122,9 @@ class Player(pygame.sprite.Sprite):
         """Aktualizace pozice hráče a animace."""
         self.get_input()
 
-        # Pohyb podle delta time
-        self.position += self.velocity * self.speed * dt
+        # Pohyb podle delta time (adrenalin: +150 px/s při HP ≤ 1)
+        effective_speed = self.speed + (150 if self.adrenalin and self.hp <= 1 else 0)
+        self.position += self.velocity * effective_speed * dt
 
         # Omezení pohybu na hranice světa
         half_width = self.frame_width // 2
@@ -135,3 +162,15 @@ class Player(pygame.sprite.Sprite):
         # Nastavení aktuálního snímku (přes mapování)
         actual_direction = self.direction_map[direction]
         self.image = self.animations[actual_direction][self.current_frame]
+
+        # Neranitelnost po zásahu
+        if self.invincibility_timer > 0:
+            self.invincibility_timer -= dt
+
+    def take_hit(self) -> bool:
+        """Zpracuje zásah hráče. Vrací True pokud hráč zemřel."""
+        if self.invincibility_timer > 0:
+            return False
+        self.hp -= 1
+        self.invincibility_timer = PLAYER_INVINCIBILITY_TIME
+        return self.hp <= 0

@@ -70,7 +70,10 @@ WORLD_HEIGHT = 4800         # výška světa v pixelech
 # ==============================================================================
 
 # XP potřebné pro každý level (index = aktuální level, hodnota = XP do dalšího)
-XP_THRESHOLDS = [20, 50, 90, 140, 200, 270, 350, 440, 540, 650]
+XP_THRESHOLDS = [
+    20, 50, 90, 140, 200, 270, 350, 440, 540, 650,
+    780, 930, 1100, 1300, 1530, 1790, 2080, 2400, 2750, 3130,
+]
 
 # ==============================================================================
 # TILESET KONSTANTY
@@ -98,6 +101,42 @@ TILE_HOUSE_X = 0
 TILE_HOUSE_Y = 12
 HOUSE_WIDTH = 5
 HOUSE_HEIGHT = 5
+
+# ==============================================================================
+# HRÁČ - HP
+# ==============================================================================
+
+PLAYER_MAX_HP = 3
+PLAYER_INVINCIBILITY_TIME = 1.5   # sekundy neranitelnosti po zásahu
+
+# ==============================================================================
+# NEPŘÁTELÉ - TYPY A SEPARACE
+# ==============================================================================
+
+ENEMY_SEPARATION_DIST = 30        # px — minimální vzdálenost mezi nepřáteli
+
+FAST_ENEMY_SPEED_MULT = 2.0       # 2× rychlejší než base
+FAST_ENEMY_SCALE = 2              # menší sprite (oproti ENEMY_ANIM_SCALE = 3)
+
+TANK_ENEMY_HP = 3                 # počet životů
+TANK_ENEMY_SCALE = 4              # větší sprite
+TANK_ENEMY_SPEED_MULT = 0.5       # poloviční rychlost
+TANK_ENEMY_GEM_COUNT = 3          # počet gemů po smrti
+
+# ==============================================================================
+# ORBITÁLNÍ PROJEKTIL A VÝBUCH
+# ==============================================================================
+
+ORBIT_RADIUS = 80
+ORBIT_SPEED = 2.5       # rad/s
+EXPLOSION_RADIUS = 80
+
+# ==============================================================================
+# LEDOVÁ AURA
+# ==============================================================================
+
+AURA_RADIUS = 150
+AURA_SLOW = 0.4         # násobič rychlosti při aure
 
 # ==============================================================================
 # CACHING

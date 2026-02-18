@@ -14,6 +14,13 @@ class Renderer:
 
     def __init__(self, game) -> None:
         self.game = game
+        # Font caching — vytváříme jednou, ne každý frame
+        self.font_huge  = pygame.font.Font(None, 72)
+        self.font_big   = pygame.font.Font(None, 56)
+        self.font       = pygame.font.Font(None, 36)
+        self.font_small = pygame.font.Font(None, 28)
+        self.font_tiny  = pygame.font.Font(None, 20)
+        self.font_debug = pygame.font.Font(None, 12)
 
     def draw(self) -> None:
         """Draw game to screen."""
@@ -53,8 +60,14 @@ class Renderer:
         """Draw all game objects with Y-sorting, offset by camera."""
         renderables = []
 
-        # Player
-        renderables.append((self.game.player.position.y, self.game.player))
+        # Player — přeskočit každý druhý snímek při neranitelnosti (blikání)
+        player = self.game.player
+        show_player = (
+            player.invincibility_timer <= 0
+            or int(player.invincibility_timer * 8) % 2 == 0
+        )
+        if show_player:
+            renderables.append((player.position.y, player))
 
         # Enemies
         for enemy in self.game.enemies:
@@ -73,6 +86,18 @@ class Renderer:
             draw_y = obj.rect.top - cy
             self.game.screen.blit(obj.image, (draw_x, draw_y))
 
+        # Ledová aura hráče
+        player = self.game.player
+        if player.aura_radius > 0:
+            r = int(player.aura_radius)
+            aura_surf = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(aura_surf, (100, 180, 255, 35), (r, r), r)
+            pygame.draw.circle(aura_surf, (150, 220, 255, 90), (r, r), r, 2)
+            self.game.screen.blit(
+                aura_surf,
+                (int(player.position.x) - cx - r, int(player.position.y) - cy - r),
+            )
+
         # Draw gems and projectiles with camera offset
         for sprite in self.game.gems:
             sx = sprite.rect.left - cx
@@ -84,48 +109,87 @@ class Renderer:
             sy = sprite.rect.top - cy
             self.game.screen.blit(sprite.image, (sx, sy))
 
+        # Orbitální projektily (fialové orby)
+        for orb in self.game.orbital_projectiles:
+            sx = orb.rect.left - cx
+            sy = orb.rect.top - cy
+            self.game.screen.blit(orb.image, (sx, sy))
+
+        # HP bary nepřátel s více než 1 HP
+        for enemy in self.game.enemies:
+            if enemy.max_hp > 1:
+                bar_w = enemy.rect.width
+                bar_h = 4
+                bx = enemy.rect.left - cx
+                by = enemy.rect.top - cy - 6
+                pygame.draw.rect(self.game.screen, (60, 0, 0), (bx, by, bar_w, bar_h))
+                fill = int(bar_w * enemy.hp / enemy.max_hp)
+                if fill > 0:
+                    pygame.draw.rect(self.game.screen, (220, 50, 50), (bx, by, fill, bar_h))
+
     def _draw_ui(self) -> None:
-        """Draw HUD: score, level, XP bar, game over."""
+        """Draw HUD: score, level, XP bar, HP bar, game over."""
         screen = self.game.screen
 
         if self.game.game_over:
-            font = pygame.font.Font(None, 72)
-            game_over_text = font.render("GAME OVER", True, (255, 50, 50))
-            text_rect = game_over_text.get_rect(
+            game_over_text = self.font_huge.render("GAME OVER", True, (255, 50, 50))
+            screen.blit(game_over_text, game_over_text.get_rect(
                 center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+            ))
+            restart_text = self.font.render("Stiskni R pro restart", True, WHITE)
+            screen.blit(restart_text, restart_text.get_rect(
+                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 55)
+            ))
+            score_text = self.font_small.render(
+                f"Čas: {self.game.score}s  |  Kills: {self.game.kills}", True, (200, 200, 200)
             )
-            screen.blit(game_over_text, text_rect)
-
-            font_small = pygame.font.Font(None, 36)
-            restart_text = font_small.render("Stiskni R pro restart", True, WHITE)
-            restart_rect = restart_text.get_rect(
-                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50)
-            )
-            screen.blit(restart_text, restart_rect)
+            screen.blit(score_text, score_text.get_rect(
+                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 95)
+            ))
             return
 
-        font = pygame.font.Font(None, 36)
-
         # Score (čas)
-        score_text = font.render(f"Čas: {self.game.score}s", True, WHITE)
+        score_text = self.font.render(f"Čas: {self.game.score}s", True, WHITE)
         screen.blit(score_text, (10, 10))
 
         # Kills
-        kills_text = font.render(f"Kills: {self.game.kills}", True, WHITE)
+        kills_text = self.font.render(f"Kills: {self.game.kills}", True, WHITE)
         screen.blit(kills_text, (10, 40))
 
         # Level
-        level_text = font.render(f"Level: {self.game.level + 1}", True, (255, 220, 50))
+        level_text = self.font.render(f"Level: {self.game.level + 1}", True, (255, 220, 50))
         screen.blit(level_text, (10, 70))
 
         # Spawn interval (debug info)
-        interval_text = font.render(
+        interval_text = self.font.render(
             f"Spawn: {self.game._current_spawn_interval()}f", True, (180, 180, 180)
         )
         screen.blit(interval_text, (SCREEN_WIDTH - 150, 10))
 
+        # HP bar hráče
+        self._draw_player_hp()
+
         # XP bar
         self._draw_xp_bar()
+
+    def _draw_player_hp(self) -> None:
+        """Draw player HP as a red bar in top-right corner."""
+        screen = self.game.screen
+        player = self.game.player
+        bar_w = 150
+        bar_h = 14
+        bar_x = SCREEN_WIDTH - bar_w - 10
+        bar_y = 10
+        ratio = player.hp / player.max_hp if player.max_hp > 0 else 0
+
+        pygame.draw.rect(screen, (60, 0, 0), (bar_x, bar_y, bar_w, bar_h))
+        fill_w = int(bar_w * ratio)
+        if fill_w > 0:
+            pygame.draw.rect(screen, (220, 50, 50), (bar_x, bar_y, fill_w, bar_h))
+        pygame.draw.rect(screen, (200, 100, 100), (bar_x, bar_y, bar_w, bar_h), 1)
+
+        hp_text = self.font_tiny.render(f"HP  {player.hp} / {player.max_hp}", True, WHITE)
+        screen.blit(hp_text, (bar_x + bar_w // 2 - hp_text.get_width() // 2, bar_y + 16))
 
     def _draw_xp_bar(self) -> None:
         """Draw XP progress bar at bottom of screen."""
@@ -159,14 +223,13 @@ class Renderer:
         pygame.draw.rect(screen, (150, 150, 150), (bar_x, bar_y, bar_w, bar_h), 1)
 
         # XP text
-        font_small = pygame.font.Font(None, 20)
         if level < len(XP_THRESHOLDS):
             xp_prev = XP_THRESHOLDS[level - 1] if level > 0 else 0
-            xp_text = font_small.render(
+            xp_text = self.font_tiny.render(
                 f"XP {xp - xp_prev}/{XP_THRESHOLDS[level] - xp_prev}", True, WHITE
             )
         else:
-            xp_text = font_small.render("MAX LEVEL", True, (255, 220, 50))
+            xp_text = self.font_tiny.render("MAX LEVEL", True, (255, 220, 50))
         screen.blit(xp_text, (bar_x + bar_w // 2 - xp_text.get_width() // 2, bar_y - 2))
 
     def _draw_level_up_overlay(self) -> None:
@@ -178,15 +241,11 @@ class Renderer:
         overlay.fill((0, 0, 0, 160))
         screen.blit(overlay, (0, 0))
 
-        font_big = pygame.font.Font(None, 56)
-        font_mid = pygame.font.Font(None, 36)
-        font_small = pygame.font.Font(None, 28)
-
         # Nadpis
-        title = font_big.render("LEVEL UP!", True, (255, 220, 50))
+        title = self.font_big.render("LEVEL UP!", True, (255, 220, 50))
         screen.blit(title, title.get_rect(center=(SCREEN_WIDTH // 2, 100)))
 
-        subtitle = font_mid.render("Vyber upgrade (1 / 2 / 3):", True, WHITE)
+        subtitle = self.font.render("Vyber upgrade (1 / 2 / 3):", True, WHITE)
         screen.blit(subtitle, subtitle.get_rect(center=(SCREEN_WIDTH // 2, 155)))
 
         choices = self.game.upgrade_choices
@@ -206,15 +265,15 @@ class Renderer:
             pygame.draw.rect(screen, (80, 130, 220), card_rect, 2, border_radius=8)
 
             # Číslo volby
-            num = font_big.render(str(i + 1), True, (255, 220, 50))
+            num = self.font_big.render(str(i + 1), True, (255, 220, 50))
             screen.blit(num, num.get_rect(center=(cx + card_w // 2, card_y + 25)))
 
             # Název upgradu
-            name = font_small.render(upgrade["name"], True, WHITE)
+            name = self.font_small.render(upgrade["name"], True, WHITE)
             screen.blit(name, name.get_rect(center=(cx + card_w // 2, card_y + 65)))
 
             # Popis
-            desc = font_small.render(upgrade["desc"], True, (160, 200, 255))
+            desc = self.font_small.render(upgrade["desc"], True, (160, 200, 255))
             screen.blit(desc, desc.get_rect(center=(cx + card_w // 2, card_y + 90)))
 
     def _draw_debug_grid(self) -> None:
@@ -240,6 +299,5 @@ class Renderer:
                     (screen_x, screen_y, cell_size, cell_size), 1
                 )
 
-                font = pygame.font.Font(None, 12)
-                text = font.render(f"({col},{row})", True, (255, 255, 255))
+                text = self.font_debug.render(f"({col},{row})", True, (255, 255, 255))
                 screen.blit(text, (screen_x + 2, screen_y + 2))

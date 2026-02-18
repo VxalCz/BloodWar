@@ -56,11 +56,16 @@ class Combat:
                 self._spawn_projectile(spread_dir)
 
     def _spawn_projectile(self, direction: pygame.math.Vector2) -> None:
-        """Vytvoří projektil z pozice hráče."""
+        """Vytvoří projektil z pozice hráče s aktuálními stats hráče."""
+        player = self.game.player
         projectile = Projectile(
-            self.game.player.position.x,
-            self.game.player.position.y,
-            direction
+            player.position.x,
+            player.position.y,
+            direction,
+            speed=player.proj_speed,
+            size=player.proj_size,
+            lifetime=player.proj_lifetime,
+            pierce=player.pierce,
         )
         self.game.projectiles.add(projectile)
         self.game.all_sprites.add(projectile)

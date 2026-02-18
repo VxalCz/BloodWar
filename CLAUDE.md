@@ -48,12 +48,15 @@ python main.py
 
 | Class | Purpose |
 |-------|---------|
-| `Player` | Hero with sprite sheet animation (4 directions, 4 frames); has mutable `speed`, `magnet_radius`, `projectile_count` |
-| `Enemy` | Slime sprite chasing player; speed scales with elapsed time |
-| `Projectile` | Yellow projectile from Magic Wand; dies after 2s lifetime |
-| `ExperienceGem` | Green ring dropped by enemies; magnetic pickup radius from player |
+| `Player` | Hero with sprite sheet animation (4 directions, 4 frames); mutable stats: `speed`, `magnet_radius`, `projectile_count`, `proj_size`, `proj_speed`, `proj_lifetime`, `pierce`, `xp_bonus`, `gem_speed_mult`, `heal_on_kill`, `adrenalin`, `has_explosion`, `aura_radius`, `orbital_count` |
+| `Enemy` | Slime sprite chasing player; speed scales with elapsed time; accepts `slow_factor` |
+| `FastEnemy` | 2× speed, smaller sprite |
+| `TankEnemy` | 3 HP, 0.5× speed, larger sprite, drops 3 gems |
+| `Projectile` | Yellow projectile from Magic Wand; mutable `speed`, `size`, `lifetime`, `pierce_remaining` |
+| `OrbitalProjectile` | Purple orb orbiting player at ORBIT_RADIUS; 0.5s per-enemy hit cooldown |
+| `ExperienceGem` | Green ring dropped by enemies; magnetic pickup, respects `gem_speed_mult` |
 | `Tree` | Decorative obstacle with hitbox in lower third |
-| `Game` | Main game loop, state management, camera, upgrades |
+| `Game` | Main game loop, state management, camera, upgrades, `orbital_projectiles` group |
 
 ## Graphics
 
@@ -88,14 +91,29 @@ TILE_TREE = (6, 20, 2, 3)  # Large tree (col, row, w, h)
 ## XP & Level-up System
 
 - XP accumulates separately from score
-- Thresholds (total XP): `[20, 50, 90, 140, 200, 270, 350, 440, 540, 650]`
+- Thresholds (total XP): `[20, 50, 90, 140, 200, 270, 350, 440, 540, 650, ...]`
 - On level-up: game pauses, overlay shows 3 random upgrade choices
-- Upgrades:
-  - **Rychlost pohybu** – player.speed += 50
-  - **Kadence střelby** – wand_cooldown_frames -= 10 (min 10)
-  - **Magnetický dosah** – player.magnet_radius += 60
-  - **Dvojitá střela** – player.projectile_count += 1 (spread 15° between shots)
-- `UPGRADES` list defined in `game.py`
+- `UPGRADES` list defined in `game.py` (17 entries total)
+
+| ID | Effect |
+|----|--------|
+| `speed` | player.speed += 50 |
+| `firerate` | wand_cooldown_frames -= 10 (min 10) |
+| `magnet` | player.magnet_radius += 60 |
+| `multishot` | player.projectile_count += 1 (spread 15°) |
+| `health` | player.hp += 1 (up to max) |
+| `armor` | player.max_hp += 1, player.hp += 1 |
+| `proj_size` | player.proj_size += 6 |
+| `proj_speed` | player.proj_speed += 80 |
+| `proj_range` | player.proj_lifetime += 0.5s |
+| `xp_boost` | player.xp_bonus += 5 (added to GEM_VALUE per pickup) |
+| `vampire` | player.heal_on_kill += 0.25 (accumulates → +HP) |
+| `pierce` | player.pierce += 1 (projectile passes through N enemies) |
+| `adrenalin` | player.adrenalin = True (+150 px/s at HP ≤ 1) |
+| `gem_speed` | player.gem_speed_mult += 0.5 |
+| `explosion` | player.has_explosion = True (AoE r=80px on kill, chain kills) |
+| `aura` | player.aura_radius = 150 (enemies in range → 40% speed) |
+| `orbital` | player.orbital_count += 1 (rotating orb, 0.5s hit cooldown per enemy) |
 
 ## Debug Features
 
