@@ -59,9 +59,10 @@ class Collision:
         collected_gems = pygame.sprite.spritecollide(
             self.game.player, self.game.gems, True
         )
-        for _ in collected_gems:
+        for gem in collected_gems:
             self.game.xp += GEM_VALUE + self.game.player.xp_bonus
             self._check_level_up()
+            self.game.particle_system.spawn_gem_pickup(gem.rect.centerx, gem.rect.centery)
 
         # Player vs Trees (hitbox) — směrový pushback
         player = self.game.player
@@ -85,7 +86,10 @@ class Collision:
 
         # Player vs Enemies — HP + neranitelnost
         if pygame.sprite.spritecollide(self.game.player, self.game.enemies, False):
-            if self.game.player.take_hit():
+            player = self.game.player
+            if player.invincibility_timer <= 0:
+                self.game.particle_system.spawn_player_hit(player.position.x, player.position.y)
+            if player.take_hit():
                 self.game.game_over = True
 
     def _handle_enemy_death(self, enemy, already_killed: set = None) -> None:
@@ -103,6 +107,7 @@ class Collision:
             game.gems.add(gem)
             game.all_sprites.add(gem)
 
+        game.particle_system.spawn_death(enemy.position.x, enemy.position.y)
         enemy.kill()
         game.kills += 1
 
@@ -117,6 +122,7 @@ class Collision:
         # Exploze — AoE kolem zabitého nepřítele
         if player.has_explosion:
             explosion_pos = enemy.position.copy()
+            game.particle_system.spawn_explosion(explosion_pos.x, explosion_pos.y)
             for other in list(game.enemies):
                 if id(other) in already_killed:
                     continue

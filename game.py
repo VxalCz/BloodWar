@@ -21,6 +21,7 @@ from src.spawner import Spawner
 from src.combat import Combat
 from src.collision import Collision
 from src.renderer import Renderer
+from src.particles import ParticleSystem
 
 # Definice dostupných upgradů
 UPGRADES = [
@@ -110,6 +111,7 @@ class Game:
         self.combat = Combat(self)
         self.collision = Collision(self)
         self.renderer = Renderer(self)
+        self.particle_system = ParticleSystem()
 
     @property
     def elapsed_seconds(self) -> float:
@@ -131,6 +133,7 @@ class Game:
         """Spustí level-up obrazovku s náhodnými volbami."""
         self.level_up_pending = True
         self.upgrade_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
+        self.particle_system.spawn_level_up(self.player.position.x, self.player.position.y)
 
     def apply_upgrade(self, upgrade: dict) -> None:
         """Aplikuje vybraný upgrade."""
@@ -186,6 +189,8 @@ class Game:
 
     def update(self, dt: float) -> None:
         """Update game state."""
+        self.particle_system.update(dt)
+
         if self.game_over or self.level_up_pending:
             return
 

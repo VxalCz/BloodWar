@@ -29,6 +29,7 @@ class Renderer:
 
         self._draw_background(cx, cy)
         self._draw_objects(cx, cy)
+        self.game.particle_system.draw(self.game.screen, cx, cy)
         self._draw_ui()
 
         if self.game.show_grid:
