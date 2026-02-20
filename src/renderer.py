@@ -21,6 +21,17 @@ class Renderer:
         self.font_small = pygame.font.Font(None, 28)
         self.font_tiny  = pygame.font.Font(None, 20)
         self.font_debug = pygame.font.Font(None, 12)
+        # HUD text cache: key → (text_str, rendered_surface)
+        self._hud_cache: dict[str, tuple[str, pygame.Surface]] = {}
+
+    def _cached_render(self, font: pygame.font.Font, text: str, color, cache_key: str) -> pygame.Surface:
+        """Render text only when it changes, otherwise return cached surface."""
+        entry = self._hud_cache.get(cache_key)
+        if entry is not None and entry[0] == text:
+            return entry[1]
+        surface = font.render(text, True, color)
+        self._hud_cache[cache_key] = (text, surface)
+        return surface
 
     def draw(self) -> None:
         """Draw game to screen."""
@@ -67,33 +78,27 @@ class Renderer:
 
     def _draw_objects(self, cx: int, cy: int) -> None:
         """Draw all game objects with Y-sorting, offset by camera."""
-        renderables = []
-
         # Player — přeskočit každý druhý snímek při neranitelnosti (blikání)
         player = self.game.player
         show_player = (
             player.invincibility_timer <= 0
             or int(player.invincibility_timer * 8) % 2 == 0
         )
-        if show_player:
-            renderables.append((player.position.y, player))
 
-        # Enemies
-        for enemy in self.game.enemies:
-            renderables.append((enemy.position.y, enemy))
+        # Build renderables via list comprehension (avoids repeated .append)
+        renderables = (
+            ([(player.position.y, player)] if show_player else [])
+            + [(e.position.y, e) for e in self.game.enemies]
+            + [(t.rect.bottom, t) for t in self.game.trees]
+        )
 
-        # Trees (by hitbox bottom)
-        for tree in self.game.trees:
-            renderables.append((tree.rect.bottom, tree))
-
-        # Sort by Y
+        # Sort by Y — Timsort is efficient on nearly-sorted data
         renderables.sort(key=lambda x: x[0])
 
         # Draw sorted objects with camera offset
+        blit = self.game.screen.blit
         for _, obj in renderables:
-            draw_x = obj.rect.left - cx
-            draw_y = obj.rect.top - cy
-            self.game.screen.blit(obj.image, (draw_x, draw_y))
+            blit(obj.image, (obj.rect.left - cx, obj.rect.top - cy))
 
         # Ledová aura hráče
         player = self.game.player
@@ -158,20 +163,20 @@ class Renderer:
             return
 
         # Score (čas)
-        score_text = self.font.render(f"Čas: {self.game.score}s", True, WHITE)
+        score_text = self._cached_render(self.font, f"Čas: {self.game.score}s", WHITE, "score")
         screen.blit(score_text, (10, 10))
 
         # Kills
-        kills_text = self.font.render(f"Kills: {self.game.kills}", True, WHITE)
+        kills_text = self._cached_render(self.font, f"Kills: {self.game.kills}", WHITE, "kills")
         screen.blit(kills_text, (10, 40))
 
         # Level
-        level_text = self.font.render(f"Level: {self.game.level + 1}", True, (255, 220, 50))
+        level_text = self._cached_render(self.font, f"Level: {self.game.level + 1}", (255, 220, 50), "level")
         screen.blit(level_text, (10, 70))
 
         # Spawn interval (debug info)
-        interval_text = self.font.render(
-            f"Spawn: {self.game._current_spawn_interval()}f", True, (180, 180, 180)
+        interval_text = self._cached_render(
+            self.font, f"Spawn: {self.game._current_spawn_interval()}f", (180, 180, 180), "spawn"
         )
         screen.blit(interval_text, (SCREEN_WIDTH - 150, 10))
 
@@ -197,7 +202,7 @@ class Renderer:
             pygame.draw.rect(screen, (220, 50, 50), (bar_x, bar_y, fill_w, bar_h))
         pygame.draw.rect(screen, (200, 100, 100), (bar_x, bar_y, bar_w, bar_h), 1)
 
-        hp_text = self.font_tiny.render(f"HP  {player.hp} / {player.max_hp}", True, WHITE)
+        hp_text = self._cached_render(self.font_tiny, f"HP  {player.hp} / {player.max_hp}", WHITE, "hp")
         screen.blit(hp_text, (bar_x + bar_w // 2 - hp_text.get_width() // 2, bar_y + 16))
 
     def _draw_xp_bar(self) -> None:
@@ -227,8 +232,8 @@ class Renderer:
         pygame.draw.rect(screen, (150, 150, 150), (bar_x, bar_y, bar_w, bar_h), 1)
 
         # XP text
-        xp_text = self.font_tiny.render(
-            f"XP {xp - xp_prev}/{xp_range}", True, WHITE
+        xp_text = self._cached_render(
+            self.font_tiny, f"XP {xp - xp_prev}/{xp_range}", WHITE, "xp"
         )
         screen.blit(xp_text, (bar_x + bar_w // 2 - xp_text.get_width() // 2, bar_y - 2))
 

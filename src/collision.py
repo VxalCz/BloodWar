@@ -4,6 +4,7 @@ import pygame
 from pygame.sprite import spritecollide
 
 from constants import GEM_VALUE, xp_threshold, EXPLOSION_RADIUS, TILE_SIZE, TILESET_SCALE, PROJECTILE_DAMAGE, EXPLOSION_DAMAGE
+from math import floor
 from items import ExperienceGem
 
 
@@ -25,6 +26,12 @@ class Collision:
         dead_enemies: set[int] = set()
         dead_projectiles: set[int] = set()
 
+        # Damage = base + bonus_damage, × adrenalin
+        player = self.game.player
+        base_dmg = PROJECTILE_DAMAGE + player.bonus_damage
+        dmg_mult = player.adrenalin_damage_mult if player.is_adrenalin_active else 1.0
+        proj_damage = floor(base_dmg * dmg_mult)
+
         for enemy, proj_list in hits.items():
             if id(enemy) in dead_enemies:
                 continue
@@ -33,8 +40,13 @@ class Collision:
             for proj in proj_list:
                 if id(proj) in dead_projectiles:
                     continue
+                # Každý projektil může zasáhnout daného nepřítele max jednou
+                eid = id(enemy)
+                if eid in proj._hit_enemies:
+                    continue
+                proj._hit_enemies.add(eid)
                 # Nepřítel dostane hit
-                killed = enemy.take_hit(PROJECTILE_DAMAGE)
+                killed = enemy.take_hit(proj_damage)
                 # Pierce logika
                 if proj.pierce_remaining > 0:
                     proj.pierce_remaining -= 1
@@ -48,11 +60,12 @@ class Collision:
                     break
 
         # Orbital vs Enemy
+        orbital_damage = floor(base_dmg * dmg_mult)
         for orb in self.game.orbital_projectiles:
             for enemy in spritecollide(orb, self.game.enemies, False):
                 if orb.can_hit(enemy):
                     orb.register_hit(enemy)
-                    if enemy.take_hit(PROJECTILE_DAMAGE):
+                    if enemy.take_hit(orbital_damage):
                         self._handle_enemy_death(enemy)
 
         # Player vs Gems

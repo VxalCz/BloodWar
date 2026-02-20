@@ -70,11 +70,11 @@ WORLD_HEIGHT = 4800         # výška světa v pixelech
 # ==============================================================================
 
 # Celkové XP potřebné k dosažení levelu `level + 1`.
-# Kvadratický přírůstek: každý level vyžaduje o 5 XP víc než předchozí.
-# Příklady přírůstků: L0=20, L5=70, L10=120, L20=220
+# Kvadratický růst s monotónně rostoucími přírůstky.
+# L0=20, L5=240, L10=660, L15=1280, L20=2100
 def xp_threshold(level: int) -> int:
     """Celkové XP potřebné pro level-up z úrovně `level`."""
-    return (level + 1) * (20 + 5 * level)
+    return (level + 1) * (20 + level * 4)
 
 # ==============================================================================
 # TILESET KONSTANTY
@@ -114,6 +114,7 @@ HOUSE_HEIGHT = 5
 
 PLAYER_MAX_HP = 30
 PLAYER_INVINCIBILITY_TIME = 0.75  # sekundy neranitelnosti po zásahu (bylo 1.5)
+LEVELUP_INVINCIBILITY_TIME = 1.5  # sekundy neranitelnosti po level-up výběru
 VAMPIRE_HEAL_CAP = 7.5            # max heal_on_kill (3 upgrady po 2.5)
 
 # ==============================================================================
@@ -133,10 +134,10 @@ TANK_ENEMY_CONTACT_DMG = 20       # base kontaktní poškození tanku (×10)
 
 # ZPŮSOB ZVÝŠENÍ OBTÍŽNOSTI
 ENEMY_BASE_HP = 20                # základní HP nepřátel
-ENEMY_HP_SCALE_INTERVAL = 60      # každých 60 sekund HP × 1.2
-ENEMY_HP_SCALE_FACTOR = 1.2       # násobitel HP za každou minutu
-ENEMY_SPEED_SCALE_INTERVAL = 90   # každých 90 sekund +25% rychlost
-ENEMY_CONTACT_DMG_INTERVAL = 180  # každých 180 sekund +10 kontaktní poškození
+ENEMY_HP_SCALE_INTERVAL = 30      # každých 30 sekund HP × faktor
+ENEMY_HP_SCALE_FACTOR = 1.35      # násobitel HP za interval (exponenciální růst)
+ENEMY_SPEED_SCALE_INTERVAL = 60   # každých 60 sekund +25% rychlost (bylo 90)
+ENEMY_CONTACT_DMG_INTERVAL = 90   # každých 90 sekund +10 kontaktní poškození (bylo 180)
 
 # POŠKOZENÍ PROJEKTILŮ A VÝBUCHU
 PROJECTILE_DAMAGE = 10            # damage za jeden zásah projektilu / orbitálu

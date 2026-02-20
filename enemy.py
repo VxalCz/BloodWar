@@ -40,6 +40,43 @@ from constants import (
     ENEMY_CONTACT_DMG_INTERVAL, PROJECTILE_DAMAGE,
 )
 
+# Module-level sprite sheet (loaded once on first use) and frame cache
+_sprite_sheet: pygame.Surface | None = None
+_sprite_cache: dict[tuple[int, tuple], list[pygame.Surface]] = {}
+
+
+def _get_frames(anim_scale: int, color_tint: tuple | None) -> list[pygame.Surface]:
+    """Return cached list of 2 frames for given scale and tint."""
+    global _sprite_sheet
+    key = (anim_scale, color_tint)
+    cached = _sprite_cache.get(key)
+    if cached is not None:
+        return cached
+
+    if _sprite_sheet is None:
+        _sprite_sheet = pygame.image.load("image/slime.png").convert()
+        _sprite_sheet.set_colorkey((0, 0, 0))
+
+    sheet = _sprite_sheet
+    frame_width = sheet.get_width() // 2
+    frame_height = sheet.get_height()
+    scaled_w = frame_width * anim_scale
+    scaled_h = frame_height * anim_scale
+
+    frames = []
+    for col in range(2):
+        frame = sheet.subsurface(
+            pygame.Rect(col * frame_width, 0, frame_width, frame_height)
+        )
+        scaled = pygame.transform.scale(frame, (scaled_w, scaled_h))
+        if color_tint is not None:
+            scaled = scaled.copy()
+            scaled.fill(color_tint, special_flags=pygame.BLEND_RGB_MULT)
+        frames.append(scaled)
+
+    _sprite_cache[key] = frames
+    return frames
+
 
 class Enemy(pygame.sprite.Sprite):
     """Nepřítel - slime s animací, pohybuje se k hráči."""
@@ -77,31 +114,10 @@ class Enemy(pygame.sprite.Sprite):
         self.gem_count = gem_count
         self.contact_damage = contact_damage
 
-        # Načtení sprite sheetu (2 framy vedle sebe)
-        sprite_sheet = pygame.image.load("image/slime.png").convert()
-
-        # Nastavení průhlednosti (černá barva)
-        sprite_sheet.set_colorkey((0, 0, 0))
-
-        # Rozměr jednoho snímku
-        frame_width = sprite_sheet.get_width() // 2
-        frame_height = sprite_sheet.get_height()
-
-        # Zvětšení snímku dle anim_scale
-        self.frame_width = frame_width * anim_scale
-        self.frame_height = frame_height * anim_scale
-
-        # Rozkrájení na 2 framy
-        self.frames: list[pygame.Surface] = []
-        for col in range(2):
-            frame = sprite_sheet.subsurface(
-                pygame.Rect(col * frame_width, 0, frame_width, frame_height)
-            )
-            scaled_frame = pygame.transform.scale(frame, (self.frame_width, self.frame_height))
-            if color_tint is not None:
-                scaled_frame = scaled_frame.copy()
-                scaled_frame.fill(color_tint, special_flags=pygame.BLEND_RGB_MULT)
-            self.frames.append(scaled_frame)
+        # Cached sprite frames (shared across enemies with same scale+tint)
+        self.frames = _get_frames(anim_scale, color_tint)
+        self.frame_width = self.frames[0].get_width()
+        self.frame_height = self.frames[0].get_height()
 
         # Nastavení počátečního snímku
         self.current_frame = 0
@@ -156,12 +172,15 @@ class Enemy(pygame.sprite.Sprite):
 
 
 class FastEnemy(Enemy):
-    """Rychlý, malý nepřítel - 2× rychlost, menší sprite."""
+    """Rychlý, malý nepřítel - 2× rychlost, menší sprite, HP škáluje (0.5× base)."""
 
     def __init__(self, x: float, y: float, elapsed_seconds: float = 0.0) -> None:
+        # HP škáluje s časem jako base enemy, ale na 50 %
+        minutes = int(elapsed_seconds / ENEMY_HP_SCALE_INTERVAL)
+        scaled_hp = max(10, int(ENEMY_BASE_HP * 0.5 * (ENEMY_HP_SCALE_FACTOR ** minutes)))
         super().__init__(
             x, y,
-            hp=10,
+            hp=scaled_hp,
             speed_mult=FAST_ENEMY_SPEED_MULT,
             anim_scale=FAST_ENEMY_SCALE,
             gem_count=1,
@@ -171,13 +190,16 @@ class FastEnemy(Enemy):
 
 
 class TankEnemy(Enemy):
-    """Pomalý, velký nepřítel - 5 životů, větší sprite, 3 gemy."""
+    """Pomalý, velký nepřítel - 3× HP base, větší sprite, 3 gemy."""
 
     def __init__(self, x: float, y: float, elapsed_seconds: float = 0.0) -> None:
+        # HP škáluje s časem jako base enemy, ale na 300 %
+        minutes = int(elapsed_seconds / ENEMY_HP_SCALE_INTERVAL)
+        scaled_hp = int(ENEMY_BASE_HP * 3 * (ENEMY_HP_SCALE_FACTOR ** minutes))
         tank_dmg = TANK_ENEMY_CONTACT_DMG + int(elapsed_seconds / ENEMY_CONTACT_DMG_INTERVAL) * 10
         super().__init__(
             x, y,
-            hp=TANK_ENEMY_HP,
+            hp=scaled_hp,
             speed_mult=TANK_ENEMY_SPEED_MULT,
             anim_scale=TANK_ENEMY_SCALE,
             gem_count=TANK_ENEMY_GEM_COUNT,
@@ -210,6 +232,7 @@ class Projectile(pygame.sprite.Sprite):
         self._lifetime = 0.0
         self._max_lifetime = lifetime
         self.pierce_remaining = pierce
+        self._hit_enemies: set[int] = set()  # enemy IDs already hit (max 1 hit per enemy)
 
     def update(self, dt: float) -> None:
         """Aktualizace pozice projektilu."""

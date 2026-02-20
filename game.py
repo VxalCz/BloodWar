@@ -14,6 +14,7 @@ from constants import (
     ENEMY_SEPARATION_DIST,
     AURA_SLOW, AURA_RADIUS,
     VAMPIRE_HEAL_CAP,
+    LEVELUP_INVINCIBILITY_TIME,
 )
 from tiles import get_tile, init_grass_variants
 from player import Player
@@ -26,27 +27,32 @@ from src.combat import Combat
 from src.collision import Collision
 from src.renderer import Renderer
 from src.particles import ParticleSystem
+from src.spatial_grid import SpatialGrid
 
-# Definice dostupných upgradů
+# Definice dostupných upgradů (neomezené stackování, diminishing returns přes _scaled)
 UPGRADES = [
-    {"id": "speed",      "name": "Rychlost pohybu",   "desc": "+50 px/s pohybu"},
-    {"id": "firerate",   "name": "Kadence střelby",   "desc": "-10 framů cooldown"},
-    {"id": "magnet",     "name": "Magnetický dosah",  "desc": "+60 px dosah gemů"},
-    {"id": "multishot",  "name": "Dvojitá střela",    "desc": "+1 projektil"},
-    {"id": "health",     "name": "Léčení",            "desc": "+10 HP"},
-    {"id": "armor",      "name": "Pancíř",            "desc": "+10 max HP"},
-    {"id": "proj_size",  "name": "Větší střela",      "desc": "+6 velikost střely"},
-    {"id": "proj_speed", "name": "Rychlejší střela",  "desc": "+80 px/s střela"},
-    {"id": "proj_range", "name": "Delší dosah",       "desc": "+0.5s životnost"},
-    {"id": "xp_boost",   "name": "XP Bonus",          "desc": "+1 XP za gem"},
-    {"id": "vampire",    "name": "Vampirismus",       "desc": "+2.5 léčení/kill (max 7.5)"},
-    {"id": "pierce",     "name": "Průbojná střela",   "desc": "+1 průchod střely"},
-    {"id": "adrenalin",  "name": "Adrenalin",         "desc": "+150 px/s při 1 HP"},
-    {"id": "gem_speed",  "name": "Rychlé sbírání",    "desc": "Gemy 50 % rychlejší"},
-    {"id": "explosion",  "name": "Exploze",           "desc": "Zabití → AoE výbuch"},
-    {"id": "aura",       "name": "Ledová aura",       "desc": "Zpomalení nepřátel"},
-    {"id": "orbital",    "name": "Orbitující střela", "desc": "+1 orbitální projektil"},
+    {"id": "speed",      "name": "Rychlost",    "desc": "+50 rychlost"},
+    {"id": "firerate",   "name": "Kadence",     "desc": "-10 cooldown",       "combat": True},
+    {"id": "magnet",     "name": "Magnet",      "desc": "+60 dosah sběru"},
+    {"id": "multishot",  "name": "Multishot",   "desc": "+1 projektil",       "combat": True},
+    {"id": "damage",     "name": "Síla útoku",  "desc": "+1 damage",          "combat": True},
+    {"id": "health",     "name": "Regenerace",  "desc": "+10 HP, +regen"},
+    {"id": "armor",      "name": "Pancíř",      "desc": "+10 max HP"},
+    {"id": "proj_size",  "name": "Větší střela", "desc": "+10 velikost",      "combat": True},
+    {"id": "proj_speed", "name": "Rychlá střela", "desc": "+80 rychlost",     "combat": True},
+    {"id": "proj_range", "name": "Delší dosah", "desc": "+0.5s dolet",        "combat": True},
+    {"id": "xp_boost",   "name": "XP Bonus",    "desc": "+1 XP za gem"},
+    {"id": "vampire",    "name": "Vampirismus",  "desc": "+2.5 heal/kill",    "combat": True},
+    {"id": "pierce",     "name": "Průraz",       "desc": "+1 průchod",        "combat": True},
+    {"id": "adrenalin",  "name": "Adrenalin",    "desc": "Buff při <30% HP",  "combat": True},
+    {"id": "gem_speed",  "name": "Sběr gemů",   "desc": "+rychlost, +magnet"},
+    {"id": "explosion",  "name": "Exploze",      "desc": "AoE při zabití",    "combat": True},
+    {"id": "aura",       "name": "Ledová aura",  "desc": "Zpomalí nepřátele", "combat": True},
+    {"id": "orbital",    "name": "Orbitál",      "desc": "+1 orbitál",        "combat": True},
 ]
+
+# Prvních N levelů nabízet jen bojové upgrady
+COMBAT_ONLY_UNTIL_LEVEL = 5
 
 
 class Game:
@@ -157,6 +163,7 @@ class Game:
         self.collision = Collision(self)
         self.renderer = Renderer(self)
         self.particle_system = ParticleSystem()
+        self._separation_grid = SpatialGrid(ENEMY_SEPARATION_DIST)
 
     @property
     def elapsed_seconds(self) -> float:
@@ -177,7 +184,11 @@ class Game:
     def _trigger_level_up(self) -> None:
         """Spustí level-up obrazovku s náhodnými volbami."""
         self.level_up_pending = True
-        self.upgrade_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
+        if self.level <= COMBAT_ONLY_UNTIL_LEVEL:
+            pool = [u for u in UPGRADES if u.get("combat")]
+        else:
+            pool = UPGRADES
+        self.upgrade_choices = random.sample(pool, min(3, len(pool)))
         self.particle_system.spawn_level_up(self.player.position.x, self.player.position.y)
 
     def _scaled(self, uid: str, base: float) -> float:
@@ -198,15 +209,21 @@ class Game:
             self.player.magnet_radius += max(1, round(s(uid, 60)))
         elif uid == "multishot":
             self.player.projectile_count += 1
+        elif uid == "damage":
+            self.player.bonus_damage += 1
         elif uid == "health":
-            heal = max(1, round(s(uid, 10)))
-            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
+            self.player.hp = min(self.player.max_hp, self.player.hp + 10)
+            self.player.regen_rate += max(0.1, round(s(uid, 0.5) * 10) / 10)
         elif uid == "armor":
             bonus = max(1, round(s(uid, 10)))
             self.player.max_hp += bonus
             self.player.hp += bonus
         elif uid == "proj_size":
-            self.player.proj_size += max(1, round(s(uid, 6)))
+            self.player.proj_size += max(1, round(s(uid, 10)))
+            # Každé 2 stacky +1 pierce bonus
+            new_stacks = self.upgrade_stacks.get(uid, 0) + 1
+            if new_stacks % 2 == 0:
+                self.player.pierce += 1
         elif uid == "proj_speed":
             self.player.proj_speed += max(1, round(s(uid, 80)))
         elif uid == "proj_range":
@@ -219,8 +236,10 @@ class Game:
             self.player.pierce += 1
         elif uid == "adrenalin":
             self.player.adrenalin = True
+            self.player.adrenalin_damage_mult += 0.5  # +50% DMG per stack při ≤30% HP
         elif uid == "gem_speed":
             self.player.gem_speed_mult += max(0.05, round(s(uid, 0.5) * 20) / 20)
+            self.player.magnet_radius += max(1, round(s(uid, 30)))
         elif uid == "explosion":
             if not self.player.has_explosion:
                 self.player.has_explosion = True
@@ -240,6 +259,8 @@ class Game:
         self.upgrade_stacks[uid] = self.upgrade_stacks.get(uid, 0) + 1
         self.level_up_pending = False
         self.upgrade_choices = []
+        # Nesmrtelnost po level-upu — hráč má čas se zorientovat
+        self.player.invincibility_timer = LEVELUP_INVINCIBILITY_TIME
 
     def _rebuild_orbitals(self) -> None:
         """Znovuvytvoří orbitální projektily dle orbital_count."""
@@ -286,12 +307,19 @@ class Game:
                 slow = 1.0
             enemy.update(dt, self.player.position, self.elapsed_seconds, slow)
 
-        # Enemy separation — zamezí prolínání nepřátel
-        enemies_list = list(self.enemies)
-        for i in range(len(enemies_list)):
-            for j in range(i + 1, len(enemies_list)):
-                e1 = enemies_list[i]
-                e2 = enemies_list[j]
+        # Enemy separation — spatial grid O(n×k) místo O(n²)
+        grid = self._separation_grid
+        grid.clear()
+        for enemy in self.enemies:
+            grid.insert(enemy)
+        seen: set[tuple[int, int]] = set()
+        for e1 in self.enemies:
+            id1 = id(e1)
+            for e2 in grid.get_neighbors(e1):
+                pair = (id1, id(e2)) if id1 < id(e2) else (id(e2), id1)
+                if pair in seen:
+                    continue
+                seen.add(pair)
                 diff = e1.position - e2.position
                 dist = diff.length()
                 if 0 < dist < ENEMY_SEPARATION_DIST:

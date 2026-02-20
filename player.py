@@ -82,6 +82,7 @@ class Player(pygame.sprite.Sprite):
         self.proj_speed = PROJECTILE_SPEED
         self.proj_lifetime = 2.0
         self.pierce = 0
+        self.bonus_damage = 0          # +1 za každý damage upgrade
 
         # XP a sběr
         self.xp_bonus = 0
@@ -91,8 +92,13 @@ class Player(pygame.sprite.Sprite):
         self.heal_on_kill = 0.0
         self.heal_accum = 0.0
 
+        # Regenerace (z vylepšeného heal upgradu)
+        self.regen_rate = 0.0       # HP za sekundu
+        self.regen_accum = 0.0      # akumulátor pro zlomkové HP
+
         # Speciální schopnosti
         self.adrenalin = False
+        self.adrenalin_damage_mult = 1.0  # DPS bonus při adrenalinu
         self.has_explosion = False
         self.explosion_damage = EXPLOSION_DAMAGE
         self.explosion_radius = EXPLOSION_RADIUS
@@ -131,8 +137,17 @@ class Player(pygame.sprite.Sprite):
         """Aktualizace pozice hráče a animace."""
         self.get_input()
 
-        # Pohyb podle delta time (adrenalin: +150 px/s při HP ≤ 1)
-        effective_speed = self.speed + (150 if self.adrenalin and self.hp <= 1 else 0)
+        # Regenerace HP
+        if self.regen_rate > 0 and self.hp < self.max_hp:
+            self.regen_accum += self.regen_rate * dt
+            if self.regen_accum >= 1.0:
+                heal = int(self.regen_accum)
+                self.regen_accum -= heal
+                self.hp = min(self.max_hp, self.hp + heal)
+
+        # Pohyb podle delta time (adrenalin: +150 px/s při HP ≤ 30 %)
+        adrenalin_active = self.adrenalin and self.hp <= self.max_hp * 0.3
+        effective_speed = self.speed + (150 if adrenalin_active else 0)
         self.position += self.velocity * effective_speed * dt
 
         # Omezení pohybu na hranice světa
@@ -176,6 +191,11 @@ class Player(pygame.sprite.Sprite):
         # Neranitelnost po zásahu
         if self.invincibility_timer > 0:
             self.invincibility_timer -= dt
+
+    @property
+    def is_adrenalin_active(self) -> bool:
+        """Vrací True pokud je adrenalin aktivní (HP ≤ 30 %)."""
+        return self.adrenalin and self.hp <= self.max_hp * 0.3
 
     def take_hit(self, damage: int = 1) -> bool:
         """Zpracuje zásah hráče. Vrací True pokud hráč zemřel."""
