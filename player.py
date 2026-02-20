@@ -7,6 +7,7 @@ from constants import (
     ANIMATION_SCALE, ANIMATION_SPEED, BLUE,
     MAGNET_RADIUS, PLAYER_MAX_HP, PLAYER_INVINCIBILITY_TIME,
     PROJECTILE_SPEED, PROJECTILE_SIZE,
+    EXPLOSION_DAMAGE, EXPLOSION_RADIUS,
 )
 
 
@@ -66,6 +67,11 @@ class Player(pygame.sprite.Sprite):
         self.position = pygame.math.Vector2(x, y)
         self.velocity = pygame.math.Vector2(0, 0)
 
+        # Hitbox pro kolize — menší než rect (sprite je 48×96, postava zabírá střed)
+        hb_size = int(self.frame_width * 0.55)
+        self.hitbox = pygame.Rect(0, 0, hb_size, hb_size)
+        self.hitbox.center = (int(x), int(y))
+
         # Mutable gameplay stats (modifikovatelné upgrady)
         self.speed = PLAYER_SPEED
         self.magnet_radius = MAGNET_RADIUS
@@ -88,7 +94,10 @@ class Player(pygame.sprite.Sprite):
         # Speciální schopnosti
         self.adrenalin = False
         self.has_explosion = False
+        self.explosion_damage = EXPLOSION_DAMAGE
+        self.explosion_radius = EXPLOSION_RADIUS
         self.aura_radius = 0
+        self.aura_slow = 1.0   # 1.0 = bez efektu; klesá s levely aury
         self.orbital_count = 0
 
         # HP systém
@@ -132,8 +141,9 @@ class Player(pygame.sprite.Sprite):
         self.position.x = max(half_width, min(WORLD_WIDTH - half_width, self.position.x))
         self.position.y = max(half_height, min(WORLD_HEIGHT - half_height, self.position.y))
 
-        # Aktualizace rect
+        # Aktualizace rect a hitboxu
         self.rect.center = self.position
+        self.hitbox.center = self.rect.center
 
         # Animace podle směru pohybu
         direction = self.last_direction
@@ -167,10 +177,10 @@ class Player(pygame.sprite.Sprite):
         if self.invincibility_timer > 0:
             self.invincibility_timer -= dt
 
-    def take_hit(self) -> bool:
+    def take_hit(self, damage: int = 1) -> bool:
         """Zpracuje zásah hráče. Vrací True pokud hráč zemřel."""
         if self.invincibility_timer > 0:
             return False
-        self.hp -= 1
+        self.hp -= damage
         self.invincibility_timer = PLAYER_INVINCIBILITY_TIME
         return self.hp <= 0

@@ -5,7 +5,7 @@ import pygame
 from constants import (
     TILE_TREE_X, TILE_TREE_Y, TREE_WIDTH, TREE_HEIGHT,
     TILE_SIZE, TILESET_SCALE, GEM_SIZE, GREEN,
-    GEM_SPEED
+    GEM_SPEED,
 )
 from tiles import get_tile
 

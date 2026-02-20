@@ -1,15 +1,19 @@
 """BloodWar - main game class."""
 
+import math
 import random
 import sys
+from math import sqrt
 
 import pygame
 
 from constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, FPS,
     WORLD_WIDTH, WORLD_HEIGHT,
+    TILE_SIZE, TILESET_SCALE,
     ENEMY_SEPARATION_DIST,
     AURA_SLOW, AURA_RADIUS,
+    VAMPIRE_HEAL_CAP,
 )
 from tiles import get_tile, init_grass_variants
 from player import Player
@@ -29,13 +33,13 @@ UPGRADES = [
     {"id": "firerate",   "name": "Kadence střelby",   "desc": "-10 framů cooldown"},
     {"id": "magnet",     "name": "Magnetický dosah",  "desc": "+60 px dosah gemů"},
     {"id": "multishot",  "name": "Dvojitá střela",    "desc": "+1 projektil"},
-    {"id": "health",     "name": "Léčení",            "desc": "+1 HP"},
-    {"id": "armor",      "name": "Pancíř",            "desc": "+1 max HP"},
+    {"id": "health",     "name": "Léčení",            "desc": "+10 HP"},
+    {"id": "armor",      "name": "Pancíř",            "desc": "+10 max HP"},
     {"id": "proj_size",  "name": "Větší střela",      "desc": "+6 velikost střely"},
     {"id": "proj_speed", "name": "Rychlejší střela",  "desc": "+80 px/s střela"},
     {"id": "proj_range", "name": "Delší dosah",       "desc": "+0.5s životnost"},
-    {"id": "xp_boost",   "name": "XP Bonus",          "desc": "+5 XP za gem"},
-    {"id": "vampire",    "name": "Vampirismus",       "desc": "Léčení za zabití"},
+    {"id": "xp_boost",   "name": "XP Bonus",          "desc": "+1 XP za gem"},
+    {"id": "vampire",    "name": "Vampirismus",       "desc": "+2.5 léčení/kill (max 7.5)"},
     {"id": "pierce",     "name": "Průbojná střela",   "desc": "+1 průchod střely"},
     {"id": "adrenalin",  "name": "Adrenalin",         "desc": "+150 px/s při 1 HP"},
     {"id": "gem_speed",  "name": "Rychlé sbírání",    "desc": "Gemy 50 % rychlejší"},
@@ -63,16 +67,54 @@ class Game:
         self.gems = pygame.sprite.Group()
         self.trees = pygame.sprite.Group()
         self.orbital_projectiles = pygame.sprite.Group()
+        # Vodní dlaždice — set (tile_col, tile_row) v souřadnicích světa
+        self.water_tiles: set[tuple[int, int]] = set()
 
         # Create player in world center
         self.player = Player(WORLD_WIDTH // 2, WORLD_HEIGHT // 2)
         self.all_sprites.add(self.player)
 
-        # Generate 150 random trees spread across the world
+        # Generování vodních ploch NEJDŘÍVE — obdélníky s min. 1-tile mezerou mezi sebou
+        tile_px = TILE_SIZE * TILESET_SCALE          # 48 px
+        world_tw = WORLD_WIDTH // tile_px
+        world_th = WORLD_HEIGHT // tile_px
+        spawn_tc = (WORLD_WIDTH // 2) // tile_px
+        spawn_tr = (WORLD_HEIGHT // 2) // tile_px
+        rng = random.Random(42)
+        size_pool = [
+            (2, 2), (2, 3), (3, 2),                    # malé
+            (3, 4), (4, 3), (4, 4), (5, 3), (3, 5),   # střední
+            (6, 4), (4, 6), (7, 5), (5, 7),            # velká jezírka
+        ]
+        for _ in range(30):
+            w, h = rng.choice(size_pool)
+            cx = rng.randint(2, world_tw - w - 2)
+            cy = rng.randint(2, world_th - h - 2)
+            if abs(cx + w // 2 - spawn_tc) < 10 and abs(cy + h // 2 - spawn_tr) < 10:
+                continue
+            # Zkontrolovat 1-tile okraj kolem nového obdélníku — nesmí se dotýkat jiného jezera
+            if any((tx, ty) in self.water_tiles
+                   for ty in range(cy - 1, cy + h + 1)
+                   for tx in range(cx - 1, cx + w + 1)):
+                continue
+            for ty in range(cy, cy + h):
+                for tx in range(cx, cx + w):
+                    self.water_tiles.add((tx, ty))
+
+        # Generate 200 random trees — ne ve vodě (TREE_WIDTH=2, TREE_HEIGHT=3 tiles)
         for _ in range(200):
             x = random.randint(100, WORLD_WIDTH - 100)
             y = random.randint(100, WORLD_HEIGHT - 100)
             if self.player.position.distance_to(pygame.math.Vector2(x, y)) < 200:
+                continue
+            # Zkontrolovat zda plocha stromu (2×3 dlaždice) nezasahuje do vody
+            tc0 = x // tile_px
+            tc1 = (x + 2 * tile_px - 1) // tile_px
+            tr0 = (y - 3 * tile_px) // tile_px
+            tr1 = (y - 1) // tile_px
+            if any((tc, tr) in self.water_tiles
+                   for tr in range(tr0, tr1 + 1)
+                   for tc in range(tc0, tc1 + 1)):
                 continue
             tree = Tree(x, y)
             self.trees.add(tree)
@@ -86,9 +128,12 @@ class Game:
 
         # XP a level
         self.xp = 0
-        self.level = 0      # index do XP_THRESHOLDS
+        self.level = 0
         self.level_up_pending = False
         self.upgrade_choices: list[dict] = []
+
+        # Počet vzatých stacků pro každý upgrade (pro logaritmické škálování)
+        self.upgrade_stacks: dict[str, int] = {}
 
         # Dynamická obtížnost
         self.wand_cooldown_frames = 60   # mutable — snižuje se upgradem
@@ -118,9 +163,9 @@ class Game:
         return self.frame_count / FPS
 
     def _current_spawn_interval(self) -> int:
-        """Spawn interval klesá každých 10s o 5 framů, minimum 10."""
+        """Spawn interval klesá každých 10s o 5 framů, minimum 5."""
         reduction = int(self.elapsed_seconds // 10) * 5
-        return max(10, 60 - reduction)
+        return max(5, 45 - reduction)  # Základ 45 místo 60, min 5 místo 10
 
     def _update_camera(self) -> None:
         """Kamera sleduje hráče, clampováno na hranice světa."""
@@ -135,51 +180,69 @@ class Game:
         self.upgrade_choices = random.sample(UPGRADES, min(3, len(UPGRADES)))
         self.particle_system.spawn_level_up(self.player.position.x, self.player.position.y)
 
+    def _scaled(self, uid: str, base: float) -> float:
+        """Vrátí škálovaný bonus: base / sqrt(stack + 1). Klesá logaritmicky s každým stackem."""
+        stack = self.upgrade_stacks.get(uid, 0)
+        return base / sqrt(stack + 1)
+
     def apply_upgrade(self, upgrade: dict) -> None:
-        """Aplikuje vybraný upgrade."""
+        """Aplikuje vybraný upgrade s logaritmickým škálováním opakovaných výběrů."""
         uid = upgrade["id"]
+        s = self._scaled  # zkratka
+
         if uid == "speed":
-            self.player.speed += 50
+            self.player.speed += max(1, round(s(uid, 50)))
         elif uid == "firerate":
-            self.wand_cooldown_frames = max(10, self.wand_cooldown_frames - 10)
+            self.wand_cooldown_frames = max(10, self.wand_cooldown_frames - max(1, round(s(uid, 10))))
         elif uid == "magnet":
-            self.player.magnet_radius += 60
+            self.player.magnet_radius += max(1, round(s(uid, 60)))
         elif uid == "multishot":
             self.player.projectile_count += 1
         elif uid == "health":
-            self.player.hp = min(self.player.max_hp, self.player.hp + 1)
+            heal = max(1, round(s(uid, 10)))
+            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
         elif uid == "armor":
-            self.player.max_hp += 1
-            self.player.hp += 1
+            bonus = max(1, round(s(uid, 10)))
+            self.player.max_hp += bonus
+            self.player.hp += bonus
         elif uid == "proj_size":
-            self.player.proj_size += 6
+            self.player.proj_size += max(1, round(s(uid, 6)))
         elif uid == "proj_speed":
-            self.player.proj_speed += 80
+            self.player.proj_speed += max(1, round(s(uid, 80)))
         elif uid == "proj_range":
-            self.player.proj_lifetime += 0.5
+            self.player.proj_lifetime += max(0.05, round(s(uid, 0.5) * 20) / 20)
         elif uid == "xp_boost":
-            self.player.xp_bonus += 5
+            self.player.xp_bonus += max(1, round(s(uid, 1)))
         elif uid == "vampire":
-            self.player.heal_on_kill += 0.25
+            self.player.heal_on_kill = min(VAMPIRE_HEAL_CAP, self.player.heal_on_kill + max(0.1, s(uid, 2.5)))
         elif uid == "pierce":
             self.player.pierce += 1
         elif uid == "adrenalin":
             self.player.adrenalin = True
         elif uid == "gem_speed":
-            self.player.gem_speed_mult += 0.5
+            self.player.gem_speed_mult += max(0.05, round(s(uid, 0.5) * 20) / 20)
         elif uid == "explosion":
-            self.player.has_explosion = True
+            if not self.player.has_explosion:
+                self.player.has_explosion = True
+            else:
+                self.player.explosion_damage = round(self.player.explosion_damage * 1.2, 2)
+                self.player.explosion_radius = round(self.player.explosion_radius * 1.2, 2)
         elif uid == "aura":
-            self.player.aura_radius = AURA_RADIUS
+            if self.player.aura_radius == 0:
+                self.player.aura_radius = AURA_RADIUS
+                self.player.aura_slow = 0.90   # základ 10 % zpomalení
+            else:
+                self.player.aura_slow = max(0.10, round(self.player.aura_slow - 0.02, 2))
         elif uid == "orbital":
             self.player.orbital_count += 1
             self._rebuild_orbitals()
+
+        self.upgrade_stacks[uid] = self.upgrade_stacks.get(uid, 0) + 1
         self.level_up_pending = False
         self.upgrade_choices = []
 
     def _rebuild_orbitals(self) -> None:
         """Znovuvytvoří orbitální projektily dle orbital_count."""
-        import math
         self.orbital_projectiles.empty()
         count = self.player.orbital_count
         for i in range(count):
@@ -218,7 +281,7 @@ class Game:
         aura_radius = self.player.aura_radius
         for enemy in self.enemies:
             if aura_radius > 0 and enemy.position.distance_to(self.player.position) < aura_radius:
-                slow = AURA_SLOW
+                slow = self.player.aura_slow
             else:
                 slow = 1.0
             enemy.update(dt, self.player.position, self.elapsed_seconds, slow)
@@ -238,13 +301,31 @@ class Game:
                     e1.rect.center = e1.position
                     e2.rect.center = e2.position
 
-        # Enemy vs Tree collision — nepřátelé nemohou procházet stromy
+        # Enemy vs Tree collision
         for enemy in self.enemies:
             for tree in self.trees:
                 if enemy.rect.colliderect(tree.hitbox):
                     diff = enemy.position - pygame.math.Vector2(
                         tree.hitbox.centerx, tree.hitbox.centery
                     )
+                    if diff.length() > 0:
+                        enemy.position += diff.normalize() * 2
+                        enemy.rect.center = enemy.position
+
+        # Enemy vs Water tiles — kontrola okolních dlaždic středu nepřítele
+        tile_px = TILE_SIZE * TILESET_SCALE
+        for enemy in self.enemies:
+            ec = enemy.rect.centerx // tile_px
+            er = enemy.rect.centery // tile_px
+            for dr in range(-1, 2):
+                for dc in range(-1, 2):
+                    col, row = ec + dc, er + dr
+                    if (col, row) not in self.water_tiles:
+                        continue
+                    wr = pygame.Rect(col * tile_px, row * tile_px, tile_px, tile_px)
+                    if not enemy.rect.colliderect(wr):
+                        continue
+                    diff = enemy.position - pygame.math.Vector2(wr.centerx, wr.centery)
                     if diff.length() > 0:
                         enemy.position += diff.normalize() * 2
                         enemy.rect.center = enemy.position

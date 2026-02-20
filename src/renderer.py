@@ -4,9 +4,9 @@ import pygame
 
 from constants import (
     SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, TILE_SIZE, TILESET_SCALE,
-    XP_THRESHOLDS
+    xp_threshold,
 )
-from tiles import get_tile
+from tiles import get_tile, get_tileset_dims, get_water_tile
 
 
 class Renderer:
@@ -41,10 +41,11 @@ class Renderer:
         pygame.display.flip()
 
     def _draw_background(self, cx: int, cy: int) -> None:
-        """Draw tiled grass background offset by camera."""
+        """Draw tiled grass background with autotiled water tiles."""
         grass_tile = self.game.grass_tile
-        tw = grass_tile.get_width()
-        th = grass_tile.get_height()
+        tw = TILE_SIZE * TILESET_SCALE
+        th = TILE_SIZE * TILESET_SCALE
+        water_tiles = self.game.water_tiles
 
         start_col = cx // tw
         start_row = cy // th
@@ -55,7 +56,14 @@ class Renderer:
             for col in range(start_col, start_col + cols_needed):
                 sx = col * tw - cx
                 sy = row * th - cy
-                self.game.screen.blit(grass_tile, (sx, sy))
+                if (col, row) in water_tiles:
+                    top    = (col, row - 1) in water_tiles
+                    bottom = (col, row + 1) in water_tiles
+                    left   = (col - 1, row) in water_tiles
+                    right  = (col + 1, row) in water_tiles
+                    self.game.screen.blit(get_water_tile(top, bottom, left, right), (sx, sy))
+                else:
+                    self.game.screen.blit(grass_tile, (sx, sy))
 
     def _draw_objects(self, cx: int, cy: int) -> None:
         """Draw all game objects with Y-sorting, offset by camera."""
@@ -204,15 +212,10 @@ class Renderer:
         xp = self.game.xp
 
         # XP do dalšího levelu
-        if level < len(XP_THRESHOLDS):
-            xp_needed = XP_THRESHOLDS[level]
-            # Předchozí threshold (pro relativní progress)
-            xp_prev = XP_THRESHOLDS[level - 1] if level > 0 else 0
-            xp_relative = xp - xp_prev
-            xp_range = xp_needed - xp_prev
-            progress = min(1.0, xp_relative / xp_range) if xp_range > 0 else 1.0
-        else:
-            progress = 1.0  # Max level
+        xp_needed = xp_threshold(level)
+        xp_prev = xp_threshold(level - 1) if level > 0 else 0
+        xp_range = xp_needed - xp_prev
+        progress = min(1.0, (xp - xp_prev) / xp_range) if xp_range > 0 else 1.0
 
         # Background
         pygame.draw.rect(screen, (40, 40, 40), (bar_x, bar_y, bar_w, bar_h))
@@ -224,13 +227,9 @@ class Renderer:
         pygame.draw.rect(screen, (150, 150, 150), (bar_x, bar_y, bar_w, bar_h), 1)
 
         # XP text
-        if level < len(XP_THRESHOLDS):
-            xp_prev = XP_THRESHOLDS[level - 1] if level > 0 else 0
-            xp_text = self.font_tiny.render(
-                f"XP {xp - xp_prev}/{XP_THRESHOLDS[level] - xp_prev}", True, WHITE
-            )
-        else:
-            xp_text = self.font_tiny.render("MAX LEVEL", True, (255, 220, 50))
+        xp_text = self.font_tiny.render(
+            f"XP {xp - xp_prev}/{xp_range}", True, WHITE
+        )
         screen.blit(xp_text, (bar_x + bar_w // 2 - xp_text.get_width() // 2, bar_y - 2))
 
     def _draw_level_up_overlay(self) -> None:
@@ -278,9 +277,10 @@ class Renderer:
             screen.blit(desc, desc.get_rect(center=(cx + card_w // 2, card_y + 90)))
 
     def _draw_debug_grid(self) -> None:
-        """Draw debug grid with tileset tiles."""
+        """Draw debug grid with tileset tiles — souřadnice = pozice v tilesetu."""
         cell_size = TILE_SIZE * TILESET_SCALE
         screen = self.game.screen
+        tcols, trows = get_tileset_dims()
 
         start_col = int(self.game.camera_x // cell_size)
         end_col = start_col + (SCREEN_WIDTH // cell_size) + 2
@@ -292,7 +292,11 @@ class Renderer:
                 screen_x = col * cell_size - self.game.camera_x
                 screen_y = row * cell_size - self.game.camera_y
 
-                tile = get_tile(col, row)
+                # Obalit souřadnice do hranic tilesetu — tileset se opakuje
+                tc = col % tcols if tcols > 0 else col
+                tr = row % trows if trows > 0 else row
+
+                tile = get_tile(tc, tr)
                 screen.blit(tile, (screen_x, screen_y))
 
                 pygame.draw.rect(
@@ -300,5 +304,5 @@ class Renderer:
                     (screen_x, screen_y, cell_size, cell_size), 1
                 )
 
-                text = self.font_debug.render(f"({col},{row})", True, (255, 255, 255))
+                text = self.font_debug.render(f"({tc},{tr})", True, (255, 255, 255))
                 screen.blit(text, (screen_x + 2, screen_y + 2))

@@ -4,6 +4,7 @@ import pygame
 
 from constants import (
     TILE_SIZE, TILESET_SCALE, GRASS_TILE_COL, GRASS_TILE_ROW,
+    POND_TILE_X, POND_TILE_Y,
     _tileset_cache
 )
 
@@ -36,8 +37,39 @@ def _load_grass_tile() -> pygame.Surface:
 
 GRASS_TILE: pygame.Surface = None  # type: ignore
 
+_tileset_cols: int = 0
+_tileset_rows: int = 0
+
+
+def get_tileset_dims() -> tuple[int, int]:
+    """Vrátí (počet sloupců, počet řádků) tilesetu."""
+    return _tileset_cols, _tileset_rows
+
+
+def get_water_tile(top: bool, bottom: bool, left: bool, right: bool) -> pygame.Surface:
+    """Autotile: vybere správnou dlaždici vody podle 4 kardinálních sousedů.
+
+    top/bottom/left/right = True pokud soused je také voda.
+    Mapuje na 3×3 sadu jezírka (POND_TILE_X/Y je levý horní roh sady).
+    """
+    tg, bg, lg, rg = not top, not bottom, not left, not right
+    # Rohy mají přednost před hranami
+    if tg and lg:   col, row = POND_TILE_X,     POND_TILE_Y        # ┌ TL roh
+    elif tg and rg: col, row = POND_TILE_X + 2, POND_TILE_Y        # ┐ TR roh
+    elif bg and lg: col, row = POND_TILE_X,     POND_TILE_Y + 2    # └ BL roh
+    elif bg and rg: col, row = POND_TILE_X + 2, POND_TILE_Y + 2    # ┘ BR roh
+    elif tg:        col, row = POND_TILE_X + 1, POND_TILE_Y        # ─ horní hrana
+    elif bg:        col, row = POND_TILE_X + 1, POND_TILE_Y + 2    # ─ dolní hrana
+    elif lg:        col, row = POND_TILE_X,     POND_TILE_Y + 1    # │ levá hrana
+    elif rg:        col, row = POND_TILE_X + 2, POND_TILE_Y + 1    # │ pravá hrana
+    else:           col, row = POND_TILE_X + 1, POND_TILE_Y + 1    # □ střed (hluboká voda)
+    return get_tile(col, row)
+
 
 def init_grass_variants() -> None:
-    """Inicializace trávy (zavolat po pygame.init())."""
-    global GRASS_TILE
+    """Inicializace trávy a uložení rozměrů tilesetu (zavolat po pygame.init())."""
+    global GRASS_TILE, _tileset_cols, _tileset_rows
     GRASS_TILE = _load_grass_tile()
+    ts = pygame.image.load("image/tileset.png")
+    _tileset_cols = ts.get_width() // TILE_SIZE
+    _tileset_rows = ts.get_height() // TILE_SIZE

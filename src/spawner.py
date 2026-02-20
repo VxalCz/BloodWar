@@ -27,8 +27,12 @@ class Spawner:
             # 120s+ — všechny typy včetně tanků
             return random.choice([Enemy, FastEnemy, TankEnemy])
 
-    def spawn_enemy(self) -> None:
-        """Create new enemy at screen edge (world-space)."""
+    def _spawn_count(self) -> int:
+        """Počet nepřátel na jeden spawn — roste lineárně každou minutu."""
+        return 1 + int(self.game.elapsed_seconds // 60)
+
+    def _spawn_one(self) -> None:
+        """Spawnuje jednoho nepřítele na náhodném okraji obrazovky."""
         cx = self.game.camera_x
         cy = self.game.camera_y
         side = random.randint(0, 3)
@@ -47,6 +51,11 @@ class Spawner:
             y = cy + random.randint(0, SCREEN_HEIGHT)
 
         EnemyClass = self._pick_enemy_class()
-        enemy = EnemyClass(x, y)
+        enemy = EnemyClass(x, y, elapsed_seconds=self.game.elapsed_seconds)
         self.game.enemies.add(enemy)
         self.game.all_sprites.add(enemy)
+
+    def spawn_enemy(self) -> None:
+        """Spawnuje skupinu nepřátel — počet roste lineárně s časem."""
+        for _ in range(self._spawn_count()):
+            self._spawn_one()

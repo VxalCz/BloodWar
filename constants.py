@@ -54,7 +54,7 @@ WAND_COOLDOWN = 60          # frames (1 sekunda při 60 FPS)
 # ==============================================================================
 
 GEM_SIZE = 10
-GEM_VALUE = 10              # XP za gem
+GEM_VALUE = 5               # XP za gem
 MAGNET_RADIUS = 100        # pixelů - vzdálenost pro magnet efekt
 GEM_SPEED = 200             # pixels per second - rychlost gemu k hráči
 
@@ -69,11 +69,12 @@ WORLD_HEIGHT = 4800         # výška světa v pixelech
 # XP A LEVEL-UP
 # ==============================================================================
 
-# XP potřebné pro každý level (index = aktuální level, hodnota = XP do dalšího)
-XP_THRESHOLDS = [
-    20, 50, 90, 140, 200, 270, 350, 440, 540, 650,
-    780, 930, 1100, 1300, 1530, 1790, 2080, 2400, 2750, 3130,
-]
+# Celkové XP potřebné k dosažení levelu `level + 1`.
+# Kvadratický přírůstek: každý level vyžaduje o 5 XP víc než předchozí.
+# Příklady přírůstků: L0=20, L5=70, L10=120, L20=220
+def xp_threshold(level: int) -> int:
+    """Celkové XP potřebné pro level-up z úrovně `level`."""
+    return (level + 1) * (20 + 5 * level)
 
 # ==============================================================================
 # TILESET KONSTANTY
@@ -96,6 +97,11 @@ TREE_HEIGHT = 3
 TILE_BUSH_X = 2
 TILE_BUSH_Y = 0
 
+# Jezírko (3×3 dlaždice)
+POND_TILE_X = 6
+POND_TILE_Y = 7
+POND_SIZE = 3
+
 # Dům
 TILE_HOUSE_X = 0
 TILE_HOUSE_Y = 12
@@ -106,8 +112,9 @@ HOUSE_HEIGHT = 5
 # HRÁČ - HP
 # ==============================================================================
 
-PLAYER_MAX_HP = 3
-PLAYER_INVINCIBILITY_TIME = 1.5   # sekundy neranitelnosti po zásahu
+PLAYER_MAX_HP = 30
+PLAYER_INVINCIBILITY_TIME = 0.75  # sekundy neranitelnosti po zásahu (bylo 1.5)
+VAMPIRE_HEAL_CAP = 7.5            # max heal_on_kill (3 upgrady po 2.5)
 
 # ==============================================================================
 # NEPŘÁTELÉ - TYPY A SEPARACE
@@ -118,10 +125,22 @@ ENEMY_SEPARATION_DIST = 30        # px — minimální vzdálenost mezi nepřát
 FAST_ENEMY_SPEED_MULT = 2.0       # 2× rychlejší než base
 FAST_ENEMY_SCALE = 2              # menší sprite (oproti ENEMY_ANIM_SCALE = 3)
 
-TANK_ENEMY_HP = 3                 # počet životů
+TANK_ENEMY_HP = 50                # počet životů (×10)
 TANK_ENEMY_SCALE = 4              # větší sprite
 TANK_ENEMY_SPEED_MULT = 0.5       # poloviční rychlost
 TANK_ENEMY_GEM_COUNT = 3          # počet gemů po smrti
+TANK_ENEMY_CONTACT_DMG = 20       # base kontaktní poškození tanku (×10)
+
+# ZPŮSOB ZVÝŠENÍ OBTÍŽNOSTI
+ENEMY_BASE_HP = 20                # základní HP nepřátel
+ENEMY_HP_SCALE_INTERVAL = 60      # každých 60 sekund HP × 1.2
+ENEMY_HP_SCALE_FACTOR = 1.2       # násobitel HP za každou minutu
+ENEMY_SPEED_SCALE_INTERVAL = 90   # každých 90 sekund +25% rychlost
+ENEMY_CONTACT_DMG_INTERVAL = 180  # každých 180 sekund +10 kontaktní poškození
+
+# POŠKOZENÍ PROJEKTILŮ A VÝBUCHU
+PROJECTILE_DAMAGE = 10            # damage za jeden zásah projektilu / orbitálu
+EXPLOSION_DAMAGE = 5              # damage výbuchu v AoE (není instant kill)
 
 # ==============================================================================
 # ORBITÁLNÍ PROJEKTIL A VÝBUCH

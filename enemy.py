@@ -4,13 +4,40 @@ import math
 
 import pygame
 
+
+# Barevné fáze dle obtížnosti (elapsed_seconds → tint)
+_DANGER_TINTS = [
+    (0,   (150, 255, 150)),   # zelená
+    (90,  (200, 255, 100)),   # žlutozelená
+    (180, (255, 255,  50)),   # žlutá
+    (270, (255, 160,  50)),   # oranžová
+    (360, (255,  60,  60)),   # červená
+    (450, (220,  50, 255)),   # fialová
+]
+
+
+def enemy_danger_tint(elapsed_seconds: float) -> tuple:
+    """Vrací RGB tint nepřítele dle uplynulého času (lineární interpolace)."""
+    t = max(0.0, elapsed_seconds)
+    for i in range(len(_DANGER_TINTS) - 1):
+        t0, c0 = _DANGER_TINTS[i]
+        t1, c1 = _DANGER_TINTS[i + 1]
+        if t <= t1:
+            alpha = (t - t0) / (t1 - t0)
+            return tuple(int(c0[j] + (c1[j] - c0[j]) * alpha) for j in range(3))
+    return _DANGER_TINTS[-1][1]
+
 from constants import (
     ENEMY_SIZE, BASE_ENEMY_SPEED, RED,
     PROJECTILE_SPEED, PROJECTILE_SIZE, YELLOW,
     ENEMY_ANIM_SCALE, ENEMY_ANIM_SPEED,
     FAST_ENEMY_SPEED_MULT, FAST_ENEMY_SCALE,
     TANK_ENEMY_HP, TANK_ENEMY_SCALE, TANK_ENEMY_SPEED_MULT, TANK_ENEMY_GEM_COUNT,
+    TANK_ENEMY_CONTACT_DMG,
     ORBIT_RADIUS, ORBIT_SPEED,
+    ENEMY_BASE_HP, ENEMY_HP_SCALE_INTERVAL, ENEMY_HP_SCALE_FACTOR,
+    ENEMY_SPEED_SCALE_INTERVAL,
+    ENEMY_CONTACT_DMG_INTERVAL, PROJECTILE_DAMAGE,
 )
 
 
@@ -19,18 +46,36 @@ class Enemy(pygame.sprite.Sprite):
 
     def __init__(
         self, x: float, y: float,
-        hp: int = 1,
+        hp: int = None,
         speed_mult: float = 1.0,
         anim_scale: int = ENEMY_ANIM_SCALE,
         gem_count: int = 1,
+        elapsed_seconds: float = 0.0,
+        contact_damage: int = None,
+        color_tint: tuple = None,
+        _auto_tint: bool = True,
     ) -> None:
         super().__init__()
+
+        # Automatický tint dle obtížnosti (přepíše se explicitním color_tint)
+        if color_tint is None and _auto_tint:
+            color_tint = enemy_danger_tint(elapsed_seconds)
+
+        # HP škáluje multiplikativně: každou minutu ×1.2
+        if hp is None:
+            minutes = int(elapsed_seconds / ENEMY_HP_SCALE_INTERVAL)
+            hp = int(ENEMY_BASE_HP * (ENEMY_HP_SCALE_FACTOR ** minutes))
+
+        # Kontaktní poškození škáluje s časem: každých 180s +10 dmg
+        if contact_damage is None:
+            contact_damage = 10 * (1 + int(elapsed_seconds / ENEMY_CONTACT_DMG_INTERVAL))
 
         # HP a stats
         self.max_hp = hp
         self.hp = hp
         self.speed_mult = speed_mult
         self.gem_count = gem_count
+        self.contact_damage = contact_damage
 
         # Načtení sprite sheetu (2 framy vedle sebe)
         sprite_sheet = pygame.image.load("image/slime.png").convert()
@@ -53,6 +98,9 @@ class Enemy(pygame.sprite.Sprite):
                 pygame.Rect(col * frame_width, 0, frame_width, frame_height)
             )
             scaled_frame = pygame.transform.scale(frame, (self.frame_width, self.frame_height))
+            if color_tint is not None:
+                scaled_frame = scaled_frame.copy()
+                scaled_frame.fill(color_tint, special_flags=pygame.BLEND_RGB_MULT)
             self.frames.append(scaled_frame)
 
         # Nastavení počátečního snímku
@@ -67,9 +115,14 @@ class Enemy(pygame.sprite.Sprite):
         self.position = pygame.math.Vector2(x, y)
         self.velocity = pygame.math.Vector2(0, 0)
 
-    def take_hit(self) -> bool:
+        # Hitbox pro kolize — ~55 % kratší strany spritu
+        hb_size = int(min(self.frame_width, self.frame_height) * 0.55)
+        self.hitbox = pygame.Rect(0, 0, hb_size, hb_size)
+        self.hitbox.center = (int(x), int(y))
+
+    def take_hit(self, damage: int = PROJECTILE_DAMAGE) -> bool:
         """Zpracuje zásah. Vrací True pokud nepřítel zemřel."""
-        self.hp -= 1
+        self.hp -= damage
         return self.hp <= 0
 
     def update(self, dt: float, player_position: pygame.math.Vector2, elapsed_seconds: float = 0.0, slow_factor: float = 1.0) -> None:
@@ -83,14 +136,15 @@ class Enemy(pygame.sprite.Sprite):
         else:
             self.velocity = pygame.math.Vector2(0, 0)
 
-        # Rychlost roste s časem: každé 2 minuty +100%; násobeno speed_mult a slow_factor
-        speed = BASE_ENEMY_SPEED * self.speed_mult * (1.0 + elapsed_seconds / 120.0) * slow_factor
+        # Rychlost roste s časem: každých 90s +25%; násobeno speed_mult a slow_factor
+        speed = BASE_ENEMY_SPEED * self.speed_mult * (1.0 + elapsed_seconds / ENEMY_SPEED_SCALE_INTERVAL) * slow_factor
 
         # Pohyb podle delta time
         self.position += self.velocity * speed * dt
 
-        # Aktualizace rect
+        # Aktualizace rect a hitboxu
         self.rect.center = self.position
+        self.hitbox.center = self.rect.center
 
         # Animace - střídání 2 framu
         self.animation_timer += dt
@@ -104,26 +158,31 @@ class Enemy(pygame.sprite.Sprite):
 class FastEnemy(Enemy):
     """Rychlý, malý nepřítel - 2× rychlost, menší sprite."""
 
-    def __init__(self, x: float, y: float) -> None:
+    def __init__(self, x: float, y: float, elapsed_seconds: float = 0.0) -> None:
         super().__init__(
             x, y,
-            hp=1,
+            hp=10,
             speed_mult=FAST_ENEMY_SPEED_MULT,
             anim_scale=FAST_ENEMY_SCALE,
             gem_count=1,
+            elapsed_seconds=elapsed_seconds,
+            contact_damage=10,  # rychlý, ale nebolestivý — pevně 10 (=1 hit)
         )
 
 
 class TankEnemy(Enemy):
-    """Pomalý, velký nepřítel - 3 životy, větší sprite, 3 gemy."""
+    """Pomalý, velký nepřítel - 5 životů, větší sprite, 3 gemy."""
 
-    def __init__(self, x: float, y: float) -> None:
+    def __init__(self, x: float, y: float, elapsed_seconds: float = 0.0) -> None:
+        tank_dmg = TANK_ENEMY_CONTACT_DMG + int(elapsed_seconds / ENEMY_CONTACT_DMG_INTERVAL) * 10
         super().__init__(
             x, y,
             hp=TANK_ENEMY_HP,
             speed_mult=TANK_ENEMY_SPEED_MULT,
             anim_scale=TANK_ENEMY_SCALE,
             gem_count=TANK_ENEMY_GEM_COUNT,
+            elapsed_seconds=elapsed_seconds,
+            contact_damage=tank_dmg,  # základ 20, škáluje po 10
         )
 
 
