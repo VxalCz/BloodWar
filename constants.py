@@ -132,6 +132,16 @@ TANK_ENEMY_SPEED_MULT = 0.5       # poloviční rychlost
 TANK_ENEMY_GEM_COUNT = 3          # počet gemů po smrti
 TANK_ENEMY_CONTACT_DMG = 20       # base kontaktní poškození tanku (×10)
 
+# Barevné fáze dle obtížnosti (elapsed_seconds → tint)
+DANGER_TINTS = [
+    (0,   (150, 255, 150)),   # zelená
+    (90,  (200, 255, 100)),   # žlutozelená
+    (180, (255, 255,  50)),   # žlutá
+    (270, (255, 160,  50)),   # oranžová
+    (360, (255,  60,  60)),   # červená
+    (450, (220,  50, 255)),   # fialová
+]
+
 # ZPŮSOB ZVÝŠENÍ OBTÍŽNOSTI
 ENEMY_BASE_HP = 20                # základní HP nepřátel
 ENEMY_HP_SCALE_INTERVAL = 30      # každých 30 sekund HP × faktor
@@ -163,3 +173,31 @@ AURA_SLOW = 0.4         # násobič rychlosti při aure
 # ==============================================================================
 
 _tileset_cache: dict[tuple, pygame.Surface] = {}
+
+# ==============================================================================
+# UPGRADES - seznam dostupných upgradů
+# ==============================================================================
+
+UPGRADES = [
+    {"id": "speed",      "name": "Rychlost",    "desc": "+50 rychlost"},
+    {"id": "firerate",   "name": "Kadence",     "desc": "-10 cooldown",       "combat": True},
+    {"id": "magnet",     "name": "Magnet",      "desc": "+60 dosah sběru"},
+    {"id": "multishot",  "name": "Multishot",   "desc": "+1 projektil",       "combat": True},
+    {"id": "damage",     "name": "Síla útoku",  "desc": "+1 damage",          "combat": True},
+    {"id": "health",     "name": "Regenerace",  "desc": "+10 HP, +regen"},
+    {"id": "armor",      "name": "Pancíř",      "desc": "+10 max HP"},
+    {"id": "proj_size",  "name": "Větší střela", "desc": "+10 velikost",      "combat": True},
+    {"id": "proj_speed", "name": "Rychlá střela", "desc": "+80 rychlost",     "combat": True},
+    {"id": "proj_range", "name": "Delší dosah", "desc": "+0.5s dolet",        "combat": True},
+    {"id": "xp_boost",   "name": "XP Bonus",    "desc": "+1 XP za gem"},
+    {"id": "vampire",    "name": "Vampirismus",  "desc": "+2.5 heal/kill",    "combat": True},
+    {"id": "pierce",     "name": "Průraz",       "desc": "+1 průchod",        "combat": True},
+    {"id": "adrenalin",  "name": "Adrenalin",    "desc": "Buff při <30% HP",  "combat": True},
+    {"id": "gem_speed",  "name": "Sběr gemů",   "desc": "+rychlost, +magnet"},
+    {"id": "explosion",  "name": "Exploze",      "desc": "AoE při zabití",    "combat": True},
+    {"id": "aura",       "name": "Ledová aura",  "desc": "Zpomalí nepřátele", "combat": True},
+    {"id": "orbital",    "name": "Orbitál",      "desc": "+1 orbitál",        "combat": True},
+]
+
+# Prvních N levelů nabízet jen bojové upgrady
+COMBAT_ONLY_UNTIL_LEVEL = 5

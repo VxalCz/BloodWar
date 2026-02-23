@@ -4,29 +4,6 @@ import math
 
 import pygame
 
-
-# Barevné fáze dle obtížnosti (elapsed_seconds → tint)
-_DANGER_TINTS = [
-    (0,   (150, 255, 150)),   # zelená
-    (90,  (200, 255, 100)),   # žlutozelená
-    (180, (255, 255,  50)),   # žlutá
-    (270, (255, 160,  50)),   # oranžová
-    (360, (255,  60,  60)),   # červená
-    (450, (220,  50, 255)),   # fialová
-]
-
-
-def enemy_danger_tint(elapsed_seconds: float) -> tuple:
-    """Vrací RGB tint nepřítele dle uplynulého času (lineární interpolace)."""
-    t = max(0.0, elapsed_seconds)
-    for i in range(len(_DANGER_TINTS) - 1):
-        t0, c0 = _DANGER_TINTS[i]
-        t1, c1 = _DANGER_TINTS[i + 1]
-        if t <= t1:
-            alpha = (t - t0) / (t1 - t0)
-            return tuple(int(c0[j] + (c1[j] - c0[j]) * alpha) for j in range(3))
-    return _DANGER_TINTS[-1][1]
-
 from constants import (
     ENEMY_SIZE, BASE_ENEMY_SPEED, RED,
     PROJECTILE_SPEED, PROJECTILE_SIZE, YELLOW,
@@ -38,44 +15,22 @@ from constants import (
     ENEMY_BASE_HP, ENEMY_HP_SCALE_INTERVAL, ENEMY_HP_SCALE_FACTOR,
     ENEMY_SPEED_SCALE_INTERVAL,
     ENEMY_CONTACT_DMG_INTERVAL, PROJECTILE_DAMAGE,
+    DANGER_TINTS,
 )
 
-# Module-level sprite sheet (loaded once on first use) and frame cache
-_sprite_sheet: pygame.Surface | None = None
-_sprite_cache: dict[tuple[int, tuple], list[pygame.Surface]] = {}
+from src.sprite_cache import _get_enemy_frames
 
 
-def _get_frames(anim_scale: int, color_tint: tuple | None) -> list[pygame.Surface]:
-    """Return cached list of 2 frames for given scale and tint."""
-    global _sprite_sheet
-    key = (anim_scale, color_tint)
-    cached = _sprite_cache.get(key)
-    if cached is not None:
-        return cached
-
-    if _sprite_sheet is None:
-        _sprite_sheet = pygame.image.load("image/slime.png").convert()
-        _sprite_sheet.set_colorkey((0, 0, 0))
-
-    sheet = _sprite_sheet
-    frame_width = sheet.get_width() // 2
-    frame_height = sheet.get_height()
-    scaled_w = frame_width * anim_scale
-    scaled_h = frame_height * anim_scale
-
-    frames = []
-    for col in range(2):
-        frame = sheet.subsurface(
-            pygame.Rect(col * frame_width, 0, frame_width, frame_height)
-        )
-        scaled = pygame.transform.scale(frame, (scaled_w, scaled_h))
-        if color_tint is not None:
-            scaled = scaled.copy()
-            scaled.fill(color_tint, special_flags=pygame.BLEND_RGB_MULT)
-        frames.append(scaled)
-
-    _sprite_cache[key] = frames
-    return frames
+def enemy_danger_tint(elapsed_seconds: float) -> tuple:
+    """Vrací RGB tint nepřítele dle uplynulého času (lineární interpolace)."""
+    t = max(0.0, elapsed_seconds)
+    for i in range(len(DANGER_TINTS) - 1):
+        t0, c0 = DANGER_TINTS[i]
+        t1, c1 = DANGER_TINTS[i + 1]
+        if t <= t1:
+            alpha = (t - t0) / (t1 - t0)
+            return tuple(int(c0[j] + (c1[j] - c0[j]) * alpha) for j in range(3))
+    return DANGER_TINTS[-1][1]
 
 
 class Enemy(pygame.sprite.Sprite):
@@ -115,7 +70,7 @@ class Enemy(pygame.sprite.Sprite):
         self.contact_damage = contact_damage
 
         # Cached sprite frames (shared across enemies with same scale+tint)
-        self.frames = _get_frames(anim_scale, color_tint)
+        self.frames = _get_enemy_frames(anim_scale, color_tint)
         self.frame_width = self.frames[0].get_width()
         self.frame_height = self.frames[0].get_height()
 

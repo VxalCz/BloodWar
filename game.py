@@ -15,6 +15,8 @@ from constants import (
     AURA_SLOW, AURA_RADIUS,
     VAMPIRE_HEAL_CAP,
     LEVELUP_INVINCIBILITY_TIME,
+    UPGRADES,
+    COMBAT_ONLY_UNTIL_LEVEL,
 )
 from tiles import get_tile, init_grass_variants
 from player import Player
@@ -28,31 +30,7 @@ from src.collision import Collision
 from src.renderer import Renderer
 from src.particles import ParticleSystem
 from src.spatial_grid import SpatialGrid
-
-# Definice dostupných upgradů (neomezené stackování, diminishing returns přes _scaled)
-UPGRADES = [
-    {"id": "speed",      "name": "Rychlost",    "desc": "+50 rychlost"},
-    {"id": "firerate",   "name": "Kadence",     "desc": "-10 cooldown",       "combat": True},
-    {"id": "magnet",     "name": "Magnet",      "desc": "+60 dosah sběru"},
-    {"id": "multishot",  "name": "Multishot",   "desc": "+1 projektil",       "combat": True},
-    {"id": "damage",     "name": "Síla útoku",  "desc": "+1 damage",          "combat": True},
-    {"id": "health",     "name": "Regenerace",  "desc": "+10 HP, +regen"},
-    {"id": "armor",      "name": "Pancíř",      "desc": "+10 max HP"},
-    {"id": "proj_size",  "name": "Větší střela", "desc": "+10 velikost",      "combat": True},
-    {"id": "proj_speed", "name": "Rychlá střela", "desc": "+80 rychlost",     "combat": True},
-    {"id": "proj_range", "name": "Delší dosah", "desc": "+0.5s dolet",        "combat": True},
-    {"id": "xp_boost",   "name": "XP Bonus",    "desc": "+1 XP za gem"},
-    {"id": "vampire",    "name": "Vampirismus",  "desc": "+2.5 heal/kill",    "combat": True},
-    {"id": "pierce",     "name": "Průraz",       "desc": "+1 průchod",        "combat": True},
-    {"id": "adrenalin",  "name": "Adrenalin",    "desc": "Buff při <30% HP",  "combat": True},
-    {"id": "gem_speed",  "name": "Sběr gemů",   "desc": "+rychlost, +magnet"},
-    {"id": "explosion",  "name": "Exploze",      "desc": "AoE při zabití",    "combat": True},
-    {"id": "aura",       "name": "Ledová aura",  "desc": "Zpomalí nepřátele", "combat": True},
-    {"id": "orbital",    "name": "Orbitál",      "desc": "+1 orbitál",        "combat": True},
-]
-
-# Prvních N levelů nabízet jen bojové upgrady
-COMBAT_ONLY_UNTIL_LEVEL = 5
+from src.world_generator import WorldGenerator
 
 
 class Game:

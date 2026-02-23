@@ -36,6 +36,10 @@ python main.py
 | `src/combat.py` | Targeting nearest enemy, shooting (supports multishot with spread) |
 | `src/collision.py` | Collision detection, XP collection, level-up trigger |
 | `src/renderer.py` | Drawing with camera offset, Y-sorting, HUD, level-up overlay, debug grid |
+| `src/world_generator.py` | World generation (water tiles, trees) |
+| `src/sprite_cache.py` | Centralized sprite caching for enemies |
+| `src/spatial_grid.py` | Spatial hashing for O(n) collision detection |
+| `src/particles.py` | Particle effects system |
 
 ## Game Controls
 
@@ -93,7 +97,7 @@ TILE_TREE = (6, 20, 2, 3)  # Large tree (col, row, w, h)
 - XP accumulates separately from score
 - Thresholds (total XP): `[20, 50, 90, 140, 200, 270, 350, 440, 540, 650, ...]`
 - On level-up: game pauses, overlay shows 3 random upgrade choices
-- `UPGRADES` list defined in `game.py` (17 entries total)
+- `UPGRADES` list defined in `constants.py` (18 entries total)
 
 | ID | Effect |
 |----|--------|

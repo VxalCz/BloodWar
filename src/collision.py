@@ -8,6 +8,30 @@ from math import floor
 from items import ExperienceGem
 
 
+def resolve_rect_pushback(mover_rect: pygame.Rect, obstacle_rect: pygame.Rect) -> tuple[float, float]:
+    """Calculate pushback vector to resolve collision between two rectangles.
+    
+    Returns:
+        Tuple of (push_x, push_y) - the amount to move the mover to resolve collision.
+        Positive values push away from the obstacle center.
+    """
+    overlap_x = min(mover_rect.right, obstacle_rect.right) - max(mover_rect.left, obstacle_rect.left)
+    overlap_y = min(mover_rect.bottom, obstacle_rect.bottom) - max(mover_rect.top, obstacle_rect.top)
+    
+    if overlap_x < overlap_y:
+        # Push horizontally
+        if mover_rect.centerx < obstacle_rect.centerx:
+            return (-overlap_x, 0)
+        else:
+            return (overlap_x, 0)
+    else:
+        # Push vertically
+        if mover_rect.centery < obstacle_rect.centery:
+            return (0, -overlap_y)
+        else:
+            return (0, overlap_y)
+
+
 class Collision:
     """Handles collision detection and game logic."""
 

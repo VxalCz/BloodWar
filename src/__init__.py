@@ -1,7 +1,4 @@
 """BloodWar src package."""
 
-from .input_handler import InputHandler
-from .spawner import Spawner
-from .combat import Combat
-from .collision import Collision
-from .renderer import Renderer
+# Note: Lazy imports recommended to avoid circular dependencies
+# Import modules directly instead of via this package
