@@ -196,11 +196,12 @@ class Collision:
         # Exploze — AoE kolem zabitého nepřítele; udělá EXPLOSION_DAMAGE, nezabíjí ihned
         if player.has_explosion:
             explosion_pos = enemy.position.copy()
+            explosion_radius_sq = player.explosion_radius * player.explosion_radius
             game.particle_system.spawn_explosion(explosion_pos.x, explosion_pos.y)
             for other in list(game.enemies):
                 if id(other) in already_killed:
                     continue
-                if other.position.distance_to(explosion_pos) <= player.explosion_radius:
+                if other.position.distance_squared_to(explosion_pos) <= explosion_radius_sq:
                     if other.take_hit(player.explosion_damage):
                         already_killed.add(id(other))
                         self._handle_enemy_death(other, already_killed, from_explosion=True)

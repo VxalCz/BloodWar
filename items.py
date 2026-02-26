@@ -32,6 +32,9 @@ class Tree(pygame.sprite.Sprite):
             tree_height // 3
         )
 
+        # Pozice pro spatial grid (střed hitboxu)
+        self.position = pygame.math.Vector2(self.hitbox.centerx, self.hitbox.centery)
+
 
 class ExperienceGem(pygame.sprite.Sprite):
     """Experience Gem - zelený kroužek po smrti nepřítele."""

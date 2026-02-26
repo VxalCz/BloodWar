@@ -18,7 +18,7 @@ from constants import (
     DANGER_TINTS,
 )
 
-from src.sprite_cache import _get_enemy_frames
+from src.sprite_cache import _get_enemy_frames, _get_projectile_surface
 
 
 def enemy_danger_tint(elapsed_seconds: float) -> tuple:
@@ -176,9 +176,8 @@ class Projectile(pygame.sprite.Sprite):
         if size is None:
             size = PROJECTILE_SIZE
 
-        # Vytvoření surface pro sprite
-        self.image = pygame.Surface((size, size))
-        self.image.fill(YELLOW)
+        # Cached surface pro sprite
+        self.image = _get_projectile_surface(size, YELLOW)
         self.rect = self.image.get_rect(center=(x, y))
 
         # Pozice a rychlost pomocí Vector2

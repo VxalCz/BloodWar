@@ -143,6 +143,16 @@ class Game:
         self.particle_system = ParticleSystem()
         self._separation_grid = SpatialGrid(ENEMY_SEPARATION_DIST)
 
+        # Spatial grid pro stromy (statický - naplní se jednou)
+        self._tree_grid = SpatialGrid(TILE_SIZE * TILESET_SCALE * 2)  # cell ~ 96px
+        for tree in self.trees:
+            self._tree_grid.insert(tree)
+        # Tree spatial grid - static, populated once
+        tile_px = TILE_SIZE * TILESET_SCALE
+        self._tree_grid = SpatialGrid(tile_px * 2)  # cell size = 2 tiles
+        for tree in self.trees:
+            self._tree_grid.insert(tree)
+
     @property
     def elapsed_seconds(self) -> float:
         return self.frame_count / FPS
@@ -276,10 +286,12 @@ class Game:
         # Update player
         self.player.update(dt)
 
-        # Update enemies (s slow_factor z ledové aury)
+        # Update enemies (s slow_factor z ledové aury) - squared distance pro výkon
         aura_radius = self.player.aura_radius
+        aura_radius_sq = aura_radius * aura_radius if aura_radius > 0 else 0
+        player_pos = self.player.position
         for enemy in self.enemies:
-            if aura_radius > 0 and enemy.position.distance_to(self.player.position) < aura_radius:
+            if aura_radius > 0 and enemy.position.distance_squared_to(player_pos) < aura_radius_sq:
                 slow = self.player.aura_slow
             else:
                 slow = 1.0
@@ -307,9 +319,10 @@ class Game:
                     e1.rect.center = e1.position
                     e2.rect.center = e2.position
 
-        # Enemy vs Tree collision
+        # Enemy vs Tree collision - spatial grid O(n×k) místo O(n×m)
+        tree_grid = self._tree_grid
         for enemy in self.enemies:
-            for tree in self.trees:
+            for tree in tree_grid.query_point(enemy.position.x, enemy.position.y):
                 if enemy.rect.colliderect(tree.hitbox):
                     diff = enemy.position - pygame.math.Vector2(
                         tree.hitbox.centerx, tree.hitbox.centery

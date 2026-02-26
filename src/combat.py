@@ -14,17 +14,18 @@ class Combat:
         self.game = game
 
     def find_nearest_enemy(self) -> "Enemy | None":
-        """Find nearest enemy to player."""
+        """Find nearest enemy to player using squared distance for performance."""
         if not self.game.enemies:
             return None
 
         nearest_enemy = None
-        nearest_distance = float('inf')
+        nearest_dist_sq = float('inf')
+        player_pos = self.game.player.position
 
         for enemy in self.game.enemies:
-            distance = self.game.player.position.distance_to(enemy.position)
-            if distance < nearest_distance:
-                nearest_distance = distance
+            dist_sq = player_pos.distance_squared_to(enemy.position)
+            if dist_sq < nearest_dist_sq:
+                nearest_dist_sq = dist_sq
                 nearest_enemy = enemy
 
         return nearest_enemy

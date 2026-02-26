@@ -35,3 +35,13 @@ class SpatialGrid:
                     for other in bucket:
                         if other is not entity:
                             yield other
+
+    def query_point(self, x: float, y: float):
+        """Yield entities in the cell containing point (x, y) and 8 surrounding cells."""
+        cx, cy = self._key(x, y)
+        cells = self._cells
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                bucket = cells.get((cx + dx, cy + dy))
+                if bucket:
+                    yield from bucket

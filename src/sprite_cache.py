@@ -11,6 +11,9 @@ from typing import Optional
 _sprite_sheet: Optional[pygame.Surface] = None
 _sprite_cache: dict[tuple[int, tuple], list[pygame.Surface]] = {}
 
+# Projectile surface cache: size -> surface
+_projectile_cache: dict[int, pygame.Surface] = {}
+
 
 def _get_enemy_frames(anim_scale: int, color_tint: tuple | None) -> list[pygame.Surface]:
     """Return cached list of 2 frames for given scale and tint.
@@ -54,8 +57,30 @@ def _get_enemy_frames(anim_scale: int, color_tint: tuple | None) -> list[pygame.
     return frames
 
 
+def _get_projectile_surface(size: int, color: tuple) -> pygame.Surface:
+    """Return cached projectile surface for given size and color.
+
+    Args:
+        size: Width/height of the projectile in pixels
+        color: RGB color tuple
+
+    Returns:
+        pygame.Surface object
+    """
+    key = (size, color)
+    cached = _projectile_cache.get(key)
+    if cached is not None:
+        return cached
+
+    surface = pygame.Surface((size, size))
+    surface.fill(color)
+    _projectile_cache[key] = surface
+    return surface
+
+
 def clear_cache() -> None:
     """Clear all cached sprites. Useful for testing or memory management."""
-    global _sprite_sheet, _sprite_cache
+    global _sprite_sheet, _sprite_cache, _projectile_cache
     _sprite_sheet = None
     _sprite_cache.clear()
+    _projectile_cache.clear()
